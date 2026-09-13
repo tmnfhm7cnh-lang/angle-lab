@@ -262,9 +262,25 @@ the nearest wins. `toleranceImage` is a radius **in image units**, which the UI 
 
 These are the things that break this class of app. They are not optional polish.
 
+**Coordinate relationship (image ↔ view ↔ original photo).** A point's `x, y` are always stored in
+*original-image* pixel space — the same space as `image.imageSize`, which is the EXIF-corrected
+full-resolution dimensions of the source photo. Two other bitmaps exist purely for drawing and never
+redefine what a coordinate means: the **display bitmap** (longest side ≤ 2048 px, used for the
+on-screen canvas because iOS Safari caps total canvas area) and the **device backing store**
+(`cssSize × devicePixelRatio`, used only so the canvas looks sharp on Retina screens). Converting a
+screen tap to a stored point goes screen → CSS/view px (via `getBoundingClientRect`) → image px (via
+`viewToImage`, using only `viewport.scale/tx/ty`) — the display bitmap's resolution and the device
+pixel ratio never enter that formula. Verified numerically during the 2026-09-13 audit: a point placed
+while viewing a 48 MP photo through its 2048 px display bitmap landed at the mathematically exact
+original-image coordinate, to at least 13 significant figures — precision does not depend on the
+downscaled bitmap or on screen DPI.
+
 **Touch radius.** The grab radius is defined in **view space** (22 CSS px, roughly a fingertip) and
 converted to image space by dividing by `scale`. Defining it in image space makes points impossible
-to hit at high zoom and makes three points overlap at low zoom.
+to hit at high zoom and makes three points overlap at low zoom. **Consequence, not a bug:** in SELECT
+mode, starting a pan gesture within that radius of an existing point drags the point instead of
+panning the view — hit-test priority (spec: points before annotations before segments) applies to the
+first pointer of any gesture. If a "why did my point move" report ever comes in, this is why.
 
 **Overlays transform but do not scale.** A point marker is 8 CSS px at 1× and at 20×. Line widths,
 marker radii, label sizes and arc radii are all constants in view space. If overlays scaled with the
