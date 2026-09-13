@@ -1,10 +1,9 @@
 # angle-lab — implementation specification
 
 **Audience: the engineer or model implementing this.** You have not seen the conversation that
-produced it; everything you need is here. The Spanish companion document `arquitectura.md` explains
-the *why* to the product owner — this one is the contract.
+produced it; everything you need is here.
 
-Written 2026-09-13. Phase 0 is already implemented and passing.
+Written 2026-09-13.
 
 ---
 
@@ -17,8 +16,13 @@ Primary user: a strength and conditioning coach analysing artistic-swimming athl
 students and personal-training clients, on an iPhone and an iPad.
 
 **Platform decision, already made and not open for revision:** vanilla JavaScript PWA, no build
-step, no framework, no dependencies. The owner has no Mac, so native iOS cannot be compiled or
-tested. Previous apps in this project follow the same pattern and work.
+step, no framework, no dependencies. The development environment is Windows, where native iOS can
+be neither compiled nor tested, and shipping code that has never been compiled is not acceptable —
+so the layered architecture below exists partly to keep all the mathematics verifiable off-device.
+
+**Deployment target: GitHub Pages from a public repository**, served from a subdirectory
+(`<user>.github.io/angle-lab/`). Every path in the app must therefore be **relative** — `./src/...`,
+never `/src/...` — and the service worker's scope must be the subdirectory, not the domain root.
 
 ---
 
@@ -47,7 +51,6 @@ tested. Previous apps in this project follow the same pattern and work.
 angle-lab/
   package.json              type: module, no dependencies, test script
   docs/
-    arquitectura.md         Spanish, for the product owner
     implementation-spec.md  this file
   src/core/
     geometry.js             ✔ IMPLEMENTED
@@ -205,7 +208,24 @@ measurement does **not** remove its points — the points are independent entiti
 
 Every mutating function updates `project.updatedAt`.
 
-Entity shapes are listed in `arquitectura.md` §3. `source` and `landmark` on `Point` exist so that
+Entity shapes:
+
+```
+AnalysisProject     id · createdAt · updatedAt · schemaVersion · subjectCode · title · notes
+                    images[] · activeImageId
+                    points[] · segments[] · measurements[] · annotations[] · calibration
+Point               id · imageId · x · y · label · source · landmark
+Segment             id · aId · bId
+AngleMeasurement    id · type:'angle' · vertexId · aId · cId
+DistanceMeasurement id · type:'distance' · aId · bId
+Calibration         id · imageId · aId · bId · realLength · unit
+TextAnnotation      id · imageId · x · y · text
+ImageReference      id · blobKey · width · height · exifOrientation · capturedAt
+```
+
+`images` is an array from day one even though the MVP only ever puts one image in it: a video frame
+is later just an `ImageReference` carrying `videoId` and `frameIndex`, which extends the model
+instead of rewriting it. `source` and `landmark` on `Point` exist so that
 automatically detected landmarks can later become ordinary points; nothing in the MVP writes
 anything but `'manual'` and `null`.
 

@@ -12,9 +12,8 @@ Phase 0 of 8. The geometry engine is implemented and tested; nothing is rendered
 
 ## Documents
 
-- [`docs/arquitectura.md`](docs/arquitectura.md) — architecture and rationale, in Spanish.
-- [`docs/implementation-spec.md`](docs/implementation-spec.md) — module contracts, phase plan and
-  acceptance criteria, for whoever implements it.
+- [`docs/implementation-spec.md`](docs/implementation-spec.md) — architecture, module contracts,
+  phase plan and acceptance criteria.
 
 ## Tests
 
