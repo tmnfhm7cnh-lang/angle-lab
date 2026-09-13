@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>angle-lab</title>
+  <link rel="stylesheet" href="src/styles/app.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="top-bar">
+      <label class="bar-button">
+        Library
+        <input id="file-input" type="file" accept="image/*" hidden />
+      </label>
+      <label class="bar-button">
+        Camera
+        <input id="camera-input" type="file" accept="image/*" capture="environment" hidden />
+      </label>
+      <button id="fit-button" class="bar-button" type="button">Fit to screen</button>
+      <span id="zoom-readout" class="zoom-readout">100%</span>
+    </header>
+    <main id="canvas-area">
+      <canvas id="view"></canvas>
+    </main>
+  </div>
+  <script type="module" src="src/ui/app.js"></script>
+</body>
+</html>
