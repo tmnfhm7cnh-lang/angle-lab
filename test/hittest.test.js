@@ -6,6 +6,8 @@ import {
   addPoint,
   addAnnotation,
   addSegment,
+  addAngle,
+  addDistance,
 } from '../src/core/model.js';
 import { hitTest } from '../src/core/hittest.js';
 
@@ -96,5 +98,51 @@ describe('hitTest', () => {
     const p = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const hit = hitTest(project, { x: 10, y: 0 }, 10, image.id);
     assert.equal(hit.id, p.id);
+  });
+
+  test('finds a distance measurement when nothing closer matches', () => {
+    const { project, image } = setup();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    const dist = addDistance(project, a.id, b.id);
+    const hit = hitTest(project, { x: 50, y: 2 }, 5, image.id);
+    assert.equal(hit.type, 'distance');
+    assert.equal(hit.id, dist.id);
+  });
+
+  test('finds an angle measurement by proximity to either ray', () => {
+    const { project, image } = setup();
+    const vertex = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const a = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    const c = addPoint(project, { imageId: image.id, x: 0, y: 100 });
+    const angle = addAngle(project, a.id, vertex.id, c.id);
+
+    const hitOnFirstRay = hitTest(project, { x: 50, y: 2 }, 5, image.id);
+    assert.equal(hitOnFirstRay.type, 'angle');
+    assert.equal(hitOnFirstRay.id, angle.id);
+
+    const hitOnSecondRay = hitTest(project, { x: 2, y: 50 }, 5, image.id);
+    assert.equal(hitOnSecondRay.type, 'angle');
+    assert.equal(hitOnSecondRay.id, angle.id);
+  });
+
+  test('points still take priority over an angle at the vertex', () => {
+    const { project, image } = setup();
+    const vertex = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const a = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    const c = addPoint(project, { imageId: image.id, x: 0, y: 100 });
+    addAngle(project, a.id, vertex.id, c.id);
+    const hit = hitTest(project, { x: 1, y: 0 }, 5, image.id);
+    assert.equal(hit.type, 'point');
+    assert.equal(hit.id, vertex.id);
+  });
+
+  test('ignores a distance measurement whose points are on a different image', () => {
+    const { project, image } = setup();
+    const otherImage = addImage(project, { blobKey: 'b2', width: 500, height: 500 });
+    const a = addPoint(project, { imageId: otherImage.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: otherImage.id, x: 200, y: 0 });
+    addDistance(project, a.id, b.id);
+    assert.equal(hitTest(project, { x: 100, y: 0 }, 50, image.id), null);
   });
 });

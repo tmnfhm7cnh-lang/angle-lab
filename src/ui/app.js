@@ -2,7 +2,18 @@ import { createViewport, fitImage, zoomAt, panBy, clampToBounds, viewToImage, vi
 import { loadDisplayImage } from '../render/imageLoader.js';
 import { resizeCanvasBackingStore, renderFrame, renderMagnifierFrame } from '../render/canvasRenderer.js';
 import { attachPointerGestures } from './pointerGestures.js';
-import { createProject, addImage, addPoint, movePoint, removePoint } from '../core/model.js';
+import {
+  createProject,
+  addImage,
+  addPoint,
+  movePoint,
+  removePoint,
+  addSegment,
+  addAngle,
+  addDistance,
+  removeEntity,
+} from '../core/model.js';
+import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
@@ -16,7 +27,7 @@ const cameraInput = document.getElementById('camera-input');
 const fitButton = document.getElementById('fit-button');
 const zoomReadout = document.getElementById('zoom-readout');
 const toolButtons = Array.from(document.querySelectorAll('.tool-button[data-tool]'));
-const deletePointButton = document.getElementById('delete-point-button');
+const deleteButton = document.getElementById('delete-selected-button');
 const magnifierCanvas = document.getElementById('magnifier');
 const magnifierCtx = magnifierCanvas.getContext('2d');
 
@@ -27,14 +38,37 @@ let magnifierDpr = 1;
 let renderScheduled = false;
 
 let project = createProject();
-let mode = 'select'; // 'select' | 'point' — F5 adds 'line' | 'angle' | 'distance' to this list.
-let selectedPointId = null;
+let mode = 'select'; // 'select' | 'point' | 'line' | 'angle' | 'distance'
+// The selected entity can be a point, segment, angle or distance — one id
+// plus its type, since delete and highlighting both need to know which.
+let selectedEntityId = null;
+let selectedEntityType = null;
 let draggingPointId = null;
 let magnifierPointerType = null;
 // Id of a point created by the current claim, in POINT mode, so it can be
 // undone if the claim turns out to be cancelled (see onPointDragEnd) instead
 // of a real single-finger tap.
 let justCreatedPointId = null;
+// Point ids picked so far for an in-progress LINE/ANGLE/DISTANCE measurement,
+// in tap order (the second tap of an ANGLE is the vertex — see addAngle).
+let pendingPointIds = [];
+// Same undo-on-cancellation idea as justCreatedPointId, extended to
+// LINE/ANGLE/DISTANCE taps: pendingSnapshotBeforeClaim is a copy of
+// pendingPointIds from before the current claim touched it, so a cancelled
+// claim can restore exactly that — whether the claim only added a pending
+// pick or completed the measurement (which resets the array to empty) — and
+// justCreatedMeasurementId is the model entity to remove in the latter case.
+// See onPointDragEnd.
+let pendingSnapshotBeforeClaim = null;
+let justCreatedMeasurementId = null;
+
+function isMeasurementMode(m) {
+  return m === 'line' || m === 'angle' || m === 'distance';
+}
+
+function requiredPointCount(m) {
+  return m === 'angle' ? 3 : 2;
+}
 
 function cssSize() {
   const rect = canvas.getBoundingClientRect();
@@ -46,6 +80,46 @@ function activePoints() {
   return project.points.filter((p) => p.imageId === project.activeImageId);
 }
 
+// Segments/angles/distances are evaluated fresh on every render — nothing
+// is cached (core/measurements.js), so a point dragged in SELECT mode moves
+// every measurement that references it on the very next frame. A null
+// result (a dangling reference) is filtered out defensively, though
+// core/model.js's cascade delete means one should never actually occur.
+function activeSegments() {
+  if (!project.activeImageId) return [];
+  return project.segments
+    .map((s) => {
+      const result = evaluateSegment(project, s.id);
+      if (!result || result.a.imageId !== project.activeImageId) return null;
+      return { id: s.id, ...result };
+    })
+    .filter(Boolean);
+}
+
+function activeAngles() {
+  if (!project.activeImageId) return [];
+  return project.measurements
+    .filter((m) => m.type === 'angle')
+    .map((m) => {
+      const result = evaluateAngle(project, m.id);
+      if (!result || result.vertex.imageId !== project.activeImageId) return null;
+      return { id: m.id, ...result };
+    })
+    .filter(Boolean);
+}
+
+function activeDistances() {
+  if (!project.activeImageId) return [];
+  return project.measurements
+    .filter((m) => m.type === 'distance')
+    .map((m) => {
+      const result = evaluateDistance(project, m.id);
+      if (!result || result.a.imageId !== project.activeImageId) return null;
+      return { id: m.id, ...result };
+    })
+    .filter(Boolean);
+}
+
 function scheduleRender() {
   if (renderScheduled) return;
   renderScheduled = true;
@@ -53,10 +127,15 @@ function scheduleRender() {
     renderScheduled = false;
     renderFrame(ctx, dpr, cssSize(), viewport, image, {
       points: activePoints(),
-      selectedPointId,
+      selectedId: selectedEntityId,
+      selectedType: selectedEntityType,
+      pendingPointIds,
+      segments: activeSegments(),
+      angles: activeAngles(),
+      distances: activeDistances(),
     });
     zoomReadout.textContent = `${Math.round(viewport.scale * 100)}%`;
-    deletePointButton.disabled = !selectedPointId;
+    deleteButton.disabled = !selectedEntityId;
   });
 }
 
@@ -82,7 +161,9 @@ async function loadFile(file) {
     height: imageSize.height,
   });
   project.activeImageId = imageRef.id;
-  selectedPointId = null;
+  selectedEntityId = null;
+  selectedEntityType = null;
+  pendingPointIds = [];
   fitToScreen();
 }
 
@@ -100,9 +181,14 @@ fitButton.addEventListener('click', fitToScreen);
 
 function setMode(nextMode) {
   mode = nextMode;
+  // Switching tools abandons any in-progress LINE/ANGLE/DISTANCE pick —
+  // there is no well-defined meaning for a pending point picked under one
+  // tool once a different tool is active.
+  pendingPointIds = [];
   for (const button of toolButtons) {
     button.classList.toggle('active', button.dataset.tool === mode);
   }
+  scheduleRender();
 }
 
 for (const button of toolButtons) {
@@ -110,20 +196,24 @@ for (const button of toolButtons) {
 }
 setMode(mode);
 
-function deleteSelectedPoint() {
-  if (!selectedPointId) return;
-  removePoint(project, selectedPointId);
-  selectedPointId = null;
+function deleteSelected() {
+  if (!selectedEntityId) return;
+  // removeEntity dispatches by entity kind and, for a point, cascades to
+  // every segment/angle/distance/calibration that referenced it — a
+  // measurement never lingers with a dangling point reference.
+  removeEntity(project, selectedEntityId);
+  selectedEntityId = null;
+  selectedEntityType = null;
   scheduleRender();
 }
 
-deletePointButton.addEventListener('click', deleteSelectedPoint);
+deleteButton.addEventListener('click', deleteSelected);
 
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-  if (!selectedPointId) return;
+  if (!selectedEntityId) return;
   event.preventDefault();
-  deleteSelectedPoint();
+  deleteSelected();
 });
 
 function setupMagnifierCanvas() {
@@ -167,6 +257,29 @@ function hideMagnifier() {
 // pan/pinch gestures via onPointClaim/onPointDragMove/onPointDragEnd — see
 // pointerGestures.js. Returning true from onPointClaim tells that module
 // "I own this pointer", which suppresses panning for it.
+// Creates the measurement for the tool currently in `mode` from the three
+// (or two) picked point ids, in tap order — the second tap of an ANGLE is
+// the vertex, matching addAngle(project, aId, vertexId, cId).
+function finishPendingMeasurement() {
+  const [id1, id2, id3] = pendingPointIds;
+  let created;
+  let type;
+  if (mode === 'line') {
+    created = addSegment(project, id1, id2);
+    type = 'segment';
+  } else if (mode === 'distance') {
+    created = addDistance(project, id1, id2);
+    type = 'distance';
+  } else {
+    created = addAngle(project, id1, id2, id3);
+    type = 'angle';
+  }
+  pendingPointIds = [];
+  selectedEntityId = created.id;
+  selectedEntityType = type;
+  return created;
+}
+
 function onPointClaim(viewPoint, event) {
   if (!image || !project.activeImageId) return false;
   const imagePoint = viewToImage(viewPoint, viewport);
@@ -177,8 +290,30 @@ function onPointClaim(viewPoint, event) {
       x: imagePoint.x,
       y: imagePoint.y,
     });
-    selectedPointId = created.id;
+    selectedEntityId = created.id;
+    selectedEntityType = 'point';
     justCreatedPointId = created.id;
+    scheduleRender();
+    return true;
+  }
+
+  const toleranceImage = viewToImageLength(TOUCH_RADIUS_CSS_PX, viewport);
+  const hit = hitTest(project, imagePoint, toleranceImage, project.activeImageId);
+
+  if (isMeasurementMode(mode)) {
+    // LINE/ANGLE/DISTANCE: tap an existing point to add it to the
+    // in-progress pick, in order, until enough points exist to create the
+    // measurement. Tapping empty space abandons the current pick. The
+    // pointer is always claimed here so a tap never starts a pan/drag.
+    pendingSnapshotBeforeClaim = pendingPointIds.slice();
+    if (hit && hit.type === 'point' && !pendingPointIds.includes(hit.id)) {
+      pendingPointIds.push(hit.id);
+      if (pendingPointIds.length === requiredPointCount(mode)) {
+        justCreatedMeasurementId = finishPendingMeasurement().id;
+      }
+    } else if (!hit) {
+      pendingPointIds = [];
+    }
     scheduleRender();
     return true;
   }
@@ -186,11 +321,9 @@ function onPointClaim(viewPoint, event) {
   // SELECT mode: hit-test in image space, tolerance converted from a
   // constant view-space radius (spec §4) so it is never impossible to hit a
   // point at high zoom nor ambiguous at low zoom.
-  const toleranceImage = viewToImageLength(TOUCH_RADIUS_CSS_PX, viewport);
-  const hit = hitTest(project, imagePoint, toleranceImage, project.activeImageId);
-
   if (hit && hit.type === 'point') {
-    selectedPointId = hit.id;
+    selectedEntityId = hit.id;
+    selectedEntityType = 'point';
     draggingPointId = hit.id;
     justCreatedPointId = null;
     magnifierPointerType = event.pointerType;
@@ -199,7 +332,19 @@ function onPointClaim(viewPoint, event) {
     return true;
   }
 
-  selectedPointId = null;
+  if (hit && (hit.type === 'segment' || hit.type === 'angle' || hit.type === 'distance')) {
+    // Segments/angles/distances aren't draggable in F5, so the pointer is
+    // not claimed here — selection happens, and if the finger keeps moving
+    // it pans the view, same as tapping empty space would.
+    selectedEntityId = hit.id;
+    selectedEntityType = hit.type;
+    justCreatedPointId = null;
+    scheduleRender();
+    return false;
+  }
+
+  selectedEntityId = null;
+  selectedEntityType = null;
   justCreatedPointId = null;
   scheduleRender();
   return false;
@@ -221,13 +366,36 @@ function onPointDragEnd(point, event) {
   // Only the cancellation case means the user never intended a one-finger
   // tap: resting a second finger down to start a pinch right after touching
   // down in POINT mode must not leave behind the point that the first
-  // finger's touch had already created.
-  if (event?.type === 'pointerdown' && justCreatedPointId) {
-    removePoint(project, justCreatedPointId);
-    if (selectedPointId === justCreatedPointId) selectedPointId = null;
+  // finger's touch had already created — and the same logic applies to a
+  // LINE/ANGLE/DISTANCE tap that picked a point, or completed a measurement,
+  // right before a second finger landed.
+  if (event?.type === 'pointerdown') {
+    if (justCreatedPointId) {
+      removePoint(project, justCreatedPointId);
+      if (selectedEntityId === justCreatedPointId) {
+        selectedEntityId = null;
+        selectedEntityType = null;
+      }
+      scheduleRender();
+    }
+    if (justCreatedMeasurementId) {
+      removeEntity(project, justCreatedMeasurementId);
+      if (selectedEntityId === justCreatedMeasurementId) {
+        selectedEntityId = null;
+        selectedEntityType = null;
+      }
+    }
+    if (pendingSnapshotBeforeClaim !== null) {
+      // Restore exactly the array pendingPointIds held before this claim —
+      // correct whether the claim only pushed one pending pick or completed
+      // the measurement (finishPendingMeasurement reset it to empty).
+      pendingPointIds = pendingSnapshotBeforeClaim;
+    }
     scheduleRender();
   }
   justCreatedPointId = null;
+  pendingSnapshotBeforeClaim = null;
+  justCreatedMeasurementId = null;
   draggingPointId = null;
   magnifierPointerType = null;
   hideMagnifier();
@@ -266,7 +434,9 @@ window.__angleLab = {
   viewToImage: (p) => viewToImage(p, viewport),
   getImage: () => image,
   getProject: () => project,
-  getSelectedPointId: () => selectedPointId,
+  getSelectedPointId: () => (selectedEntityType === 'point' ? selectedEntityId : null),
+  getSelectedEntity: () => ({ id: selectedEntityId, type: selectedEntityType }),
+  getPendingPointIds: () => pendingPointIds.slice(),
   getMode: () => mode,
   // Test-only: loads a synthetic Blob through the normal loadFile path,
   // standing in for the file-input picker that automated tools cannot drive.
