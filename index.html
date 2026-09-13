@@ -18,10 +18,16 @@
         <input id="camera-input" type="file" accept="image/*" capture="environment" hidden />
       </label>
       <button id="fit-button" class="bar-button" type="button">Fit to screen</button>
+      <div id="tool-group" role="group" aria-label="Tool">
+        <button class="tool-button" data-tool="select" type="button">Select</button>
+        <button class="tool-button" data-tool="point" type="button">Point</button>
+      </div>
+      <button id="delete-point-button" class="bar-button danger-button" type="button" disabled>Delete point</button>
       <span id="zoom-readout" class="zoom-readout">100%</span>
     </header>
     <main id="canvas-area">
       <canvas id="view"></canvas>
+      <canvas id="magnifier" class="magnifier" hidden></canvas>
     </main>
   </div>
   <script type="module" src="src/ui/app.js"></script>
