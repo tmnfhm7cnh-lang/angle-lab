@@ -1,0 +1,10 @@
+{
+  "name": "angle-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Photo-based biomechanical analysis: points, angles, distances and real-world calibration.",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
