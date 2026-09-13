@@ -146,6 +146,65 @@ describe('angleAtVertex', () => {
     assert.ok(Number.isNaN(angleAtVertex(point(0, 0), point(0, 0), point(1, 1))));
     assert.ok(Number.isNaN(angleAtVertex(point(1, 1), point(0, 0), point(0, 0))));
   });
+
+  test('NaN when all three points coincide', () => {
+    const p = point(4, -9);
+    assert.ok(Number.isNaN(angleAtVertex(p, p, p)));
+  });
+
+  test('stays accurate progressively closer to 180 deg', () => {
+    // Same construction as "recovers a known angle built by rotation": C is a unit vector
+    // rotated by `rad`, so the ground truth is rad * RAD_TO_DEG and any divergence measures
+    // atan2's own error, not the test's. Near 180 deg cos(rad) saturates towards -1 (losing
+    // significant digits) while sin(rad) stays a small, well-conditioned number - exactly the
+    // regime atan2(|cross|, dot) is used here to avoid. A few ULPs of a degrees-near-180 value
+    // is on the order of 1e-13; 1e-9 is comfortably above that noise floor while still far
+    // tighter than acos-based code (which loses ~8 significant digits at this range) could pass.
+    for (const deg of [179, 179.9, 179.99, 179.999, 179.9999]) {
+      const rad = deg / RAD_TO_DEG;
+      const a = point(1, 0);
+      const b = point(0, 0);
+      const c = point(Math.cos(rad), Math.sin(rad));
+      close(angleAtVertex(a, b, c), deg, 1e-9);
+    }
+  });
+
+  test('remains invariant under translation to very large coordinates', () => {
+    // a=(1,0) b=(0,0) c=(1,1) relative to b is the 45 deg case above. Coordinates this size
+    // (1e8, 1e10) are still exactly representable integers in float64 (well under 2^53), so
+    // this is expected to hold exactly, not approximately - it isolates whether subtract()
+    // introduces any avoidable error at these magnitudes, independent of the true catastrophic
+    // cancellation case (sub-unit differences) covered separately below.
+    for (const t of [1e8, 1e10]) {
+      const a = point(1 + t, t);
+      const b = point(t, t);
+      const c = point(1 + t, 1 + t);
+      close(angleAtVertex(a, b, c), 45, 1e-9);
+    }
+  });
+
+  test('a sub-ULP difference at large coordinates collapses to NaN, not a wrong angle', () => {
+    // At 1e10, float64's representable resolution is about 2e-6: adding 1e-10 to 1e10 rounds
+    // straight back to 1e10. So a and b, defined as distinct points 1e-10 apart, become the
+    // same float64 value before geometry.js ever sees them. subtract() then yields exactly
+    // (0, 0), and the existing coincident-point guard returns NaN. This is the correct,
+    // documented behavior (NaN propagates rather than a silently wrong angle) - the failure
+    // mode this test guards against is the guard being bypassed and a bogus finite number
+    // coming out instead.
+    const a = point(1e10 + 1e-10, 0);
+    const b = point(1e10, 0);
+    const c = point(1e10, 1);
+    assert.equal(a.x - b.x, 0);
+    assert.ok(Number.isNaN(angleAtVertex(a, b, c)));
+  });
+
+  test('no Infinity for large-but-finite coordinate inputs', () => {
+    const a = point(1e10, 0);
+    const b = point(-1e10, 0);
+    const c = point(0, 1e10);
+    const result = angleAtVertex(a, b, c);
+    assert.ok(Number.isFinite(result), `got ${result}`);
+  });
 });
 
 describe('signedAngleAtVertex', () => {
@@ -175,6 +234,11 @@ describe('signedAngleAtVertex', () => {
     const b = point(1, 1);
     const c = point(-3, 9);
     close(Math.abs(signedAngleAtVertex(a, b, c)), angleAtVertex(a, b, c));
+  });
+
+  test('NaN when all three points coincide', () => {
+    const p = point(-6, 6);
+    assert.ok(Number.isNaN(signedAngleAtVertex(p, p, p)));
   });
 });
 
@@ -211,6 +275,10 @@ describe('lineOrientation', () => {
 
   test('NaN for a zero-length segment', () => {
     assert.ok(Number.isNaN(lineOrientation(point(4, 4), point(4, 4))));
+  });
+
+  test('NaN for a zero-length segment at large coordinates', () => {
+    assert.ok(Number.isNaN(lineOrientation(point(1e10, -1e8), point(1e10, -1e8))));
   });
 });
 
@@ -271,6 +339,14 @@ describe('distanceToLine', () => {
   test('NaN when the two line points coincide', () => {
     assert.ok(Number.isNaN(distanceToLine(point(1, 1), point(0, 0), point(0, 0))));
   });
+
+  test('NaN when the two line points coincide at large coordinates', () => {
+    assert.ok(Number.isNaN(distanceToLine(point(0, 0), point(1e10, 1e10), point(1e10, 1e10))));
+  });
+
+  test('stays finite and accurate at large coordinates', () => {
+    close(distanceToLine(point(1e10 + 3, 1e10 + 50), point(1e10, 1e10), point(1e10 + 10, 1e10)), 50, 1e-6);
+  });
 });
 
 describe('distanceToSegment', () => {
@@ -285,5 +361,45 @@ describe('distanceToSegment', () => {
 
   test('degenerate segment reduces to point distance', () => {
     close(distanceToSegment(point(3, 4), point(0, 0), point(0, 0)), 5);
+  });
+
+  test('degenerate segment at the query point itself is zero, not NaN', () => {
+    close(distanceToSegment(point(1e10, 1e10), point(1e10, 1e10), point(1e10, 1e10)), 0);
+  });
+
+  test('stays finite and accurate at large coordinates', () => {
+    close(
+      distanceToSegment(point(1e10 + 3, 1e10 + 50), point(1e10, 1e10), point(1e10 + 10, 1e10)),
+      50,
+      1e-6,
+    );
+  });
+});
+
+describe('geometry: no silent NaN-to-zero or unintended Infinity', () => {
+  test('coincident-point guards return NaN, never 0, across every function that has one', () => {
+    const p = point(7, -3);
+    assert.ok(Number.isNaN(angleAtVertex(p, p, point(1, 1))));
+    assert.ok(Number.isNaN(signedAngleAtVertex(p, p, point(1, 1))));
+    assert.ok(Number.isNaN(lineOrientation(p, p)));
+    assert.ok(Number.isNaN(distanceToLine(point(0, 0), p, p)));
+  });
+
+  test('no function under test produces Infinity for coordinates up to 1e10', () => {
+    const big = 1e10;
+    const a = point(big, 0);
+    const b = point(0, 0);
+    const c = point(0, big);
+    const results = [
+      distance(a, b),
+      angleAtVertex(a, b, c),
+      signedAngleAtVertex(a, b, c),
+      lineOrientation(a, b),
+      distanceToLine(c, a, b),
+      distanceToSegment(c, a, b),
+    ];
+    for (const r of results) {
+      assert.ok(Number.isFinite(r), `expected a finite result, got ${r}`);
+    }
   });
 });

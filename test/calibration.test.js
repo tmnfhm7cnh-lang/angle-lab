@@ -93,3 +93,83 @@ describe('accuracy at extreme scales', () => {
     close(pixelsToReal(100000, mmPerPixel, 'mm'), 0.5, 1e-9);
   });
 });
+
+describe('independent measurement conversion across units, two calibration setups', () => {
+  // Two distinct calibrations (100px=100cm and 500px=100cm) each applied to a THIRD,
+  // independent pixel measurement (300px, unrelated to either reference length), checked
+  // against a value computed independently here (300 * mmPerPixel, converted by hand) rather
+  // than by round-tripping pixelsToReal/realToPixels against each other.
+  test('100 px = 100 cm: a 300 px measurement converts correctly to mm, cm, m, in', () => {
+    const mmPerPixel = millimetresPerPixel(100, 'cm', 100); // 10 mm/px
+    close(pixelsToReal(300, mmPerPixel, 'mm'), 3000, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'cm'), 300, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'm'), 3, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'in'), 3000 / 25.4, 1e-9);
+  });
+
+  test('500 px = 100 cm: a 300 px measurement converts correctly to mm, cm, m, in', () => {
+    const mmPerPixel = millimetresPerPixel(100, 'cm', 500); // 2 mm/px
+    close(pixelsToReal(300, mmPerPixel, 'mm'), 600, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'cm'), 60, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'm'), 0.6, 1e-9);
+    close(pixelsToReal(300, mmPerPixel, 'in'), 600 / 25.4, 1e-9);
+  });
+});
+
+describe('near-degenerate and very large calibration references', () => {
+  test('a 2 px reference still calibrates and reports a sane, invertible scale', () => {
+    const mmPerPixel = millimetresPerPixel(50, 'cm', 2);
+    assert.ok(isCalibrated(mmPerPixel));
+    close(mmPerPixel, 250);
+    close(pixelsToReal(2, mmPerPixel, 'cm'), 50, 1e-9);
+  });
+
+  test('a 1 px reference still calibrates (the smallest non-degenerate span)', () => {
+    const mmPerPixel = millimetresPerPixel(10, 'cm', 1);
+    assert.ok(isCalibrated(mmPerPixel));
+    close(pixelsToReal(1, mmPerPixel, 'cm'), 10, 1e-9);
+  });
+
+  test('a 10000 px reference calibrates and reports a sane, invertible scale', () => {
+    const mmPerPixel = millimetresPerPixel(200, 'cm', 10000);
+    assert.ok(isCalibrated(mmPerPixel));
+    close(mmPerPixel, 0.2);
+    close(pixelsToReal(10000, mmPerPixel, 'cm'), 200, 1e-9);
+  });
+});
+
+describe('round-trip precision across the scale range', () => {
+  test('pixelsToReal(realToPixels(x)) recovers x for reference spans from 2 px to 1e6 px', () => {
+    for (const refPixels of [2, 100, 500, 10000, 1e6]) {
+      const mmPerPixel = millimetresPerPixel(37.5, 'cm', refPixels);
+      const probePixels = refPixels * 1.3;
+      const real = pixelsToReal(probePixels, mmPerPixel, 'cm');
+      const back = realToPixels(real, 'cm', mmPerPixel);
+      close(back, probePixels, 1e-6);
+    }
+  });
+
+  test('realToPixels(pixelsToReal(x)) recovers x for reference spans from 2 px to 1e6 px', () => {
+    for (const refPixels of [2, 100, 500, 10000, 1e6]) {
+      const mmPerPixel = millimetresPerPixel(37.5, 'cm', refPixels);
+      const probeReal = 12.34;
+      const pixels = realToPixels(probeReal, 'cm', mmPerPixel);
+      const back = pixelsToReal(pixels, mmPerPixel, 'cm');
+      close(back, probeReal, 1e-6);
+    }
+  });
+});
+
+describe('calibration.js is a pure function of its two live arguments', () => {
+  // calibration.js keeps no state of its own (see module docstring): every call recomputes
+  // the scale from whatever (realLength, unit, pixelLength) it is given. This test does not
+  // exercise point-dragging or the app's model layer (out of scope here) - it only confirms
+  // the pure-function contract this module promises, which is the precondition anything
+  // upstream needs in order to re-derive calibration when a reference point moves.
+  test('recomputing with a new pixelLength (as if a reference point moved) changes the scale accordingly', () => {
+    const original = millimetresPerPixel(100, 'cm', 500);
+    const afterMove = millimetresPerPixel(100, 'cm', 250);
+    close(afterMove, original * 2, 1e-9);
+    assert.notEqual(original, afterMove);
+  });
+});
