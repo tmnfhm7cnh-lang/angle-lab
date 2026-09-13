@@ -47,6 +47,14 @@ export function attachPointerGestures(
   }
 
   function onPointerDown(event) {
+    // A pointerId already in `pointers` means this is a stray re-fire of
+    // pointerdown for a contact that's already active (seen from odd
+    // browser/OS event stacks) rather than a new finger. Treat it as a
+    // no-op: reprocessing it would run onPointClaim a second time for the
+    // same physical touch — e.g. creating a second point on top of the
+    // first in POINT mode from a single tap.
+    if (pointers.has(event.pointerId)) return;
+
     // Capture can throw (NotFoundError) if the pointer was already released
     // by the platform between the event firing and this call — a system
     // gesture interrupting a touch is the real-world case. Tracking must

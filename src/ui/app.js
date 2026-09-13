@@ -31,6 +31,10 @@ let mode = 'select'; // 'select' | 'point' — F5 adds 'line' | 'angle' | 'dista
 let selectedPointId = null;
 let draggingPointId = null;
 let magnifierPointerType = null;
+// Id of a point created by the current claim, in POINT mode, so it can be
+// undone if the claim turns out to be cancelled (see onPointDragEnd) instead
+// of a real single-finger tap.
+let justCreatedPointId = null;
 
 function cssSize() {
   const rect = canvas.getBoundingClientRect();
@@ -174,6 +178,7 @@ function onPointClaim(viewPoint, event) {
       y: imagePoint.y,
     });
     selectedPointId = created.id;
+    justCreatedPointId = created.id;
     scheduleRender();
     return true;
   }
@@ -187,6 +192,7 @@ function onPointClaim(viewPoint, event) {
   if (hit && hit.type === 'point') {
     selectedPointId = hit.id;
     draggingPointId = hit.id;
+    justCreatedPointId = null;
     magnifierPointerType = event.pointerType;
     if (event.pointerType !== 'pen') showMagnifierAt(viewPoint, imagePoint);
     scheduleRender();
@@ -194,6 +200,7 @@ function onPointClaim(viewPoint, event) {
   }
 
   selectedPointId = null;
+  justCreatedPointId = null;
   scheduleRender();
   return false;
 }
@@ -206,7 +213,21 @@ function onPointDragMove(viewPoint) {
   scheduleRender();
 }
 
-function onPointDragEnd() {
+function onPointDragEnd(point, event) {
+  // A claim ends either by a genuine release of the same pointer (pointerup
+  // /pointercancel) or by cancellation because a second finger arrived —
+  // pointerGestures.js calls this hook with that second pointer's own
+  // 'pointerdown' event in the cancellation case (see attachPointerGestures).
+  // Only the cancellation case means the user never intended a one-finger
+  // tap: resting a second finger down to start a pinch right after touching
+  // down in POINT mode must not leave behind the point that the first
+  // finger's touch had already created.
+  if (event?.type === 'pointerdown' && justCreatedPointId) {
+    removePoint(project, justCreatedPointId);
+    if (selectedPointId === justCreatedPointId) selectedPointId = null;
+    scheduleRender();
+  }
+  justCreatedPointId = null;
   draggingPointId = null;
   magnifierPointerType = null;
   hideMagnifier();
