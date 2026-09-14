@@ -425,25 +425,3 @@ attachPointerGestures(canvas, {
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
 setupMagnifierCanvas();
-
-// Exposed for verification only (used by the JS console during manual and
-// automated testing); not part of the app's public surface, and removable
-// before ship.
-window.__angleLab = {
-  getViewport: () => viewport,
-  viewToImage: (p) => viewToImage(p, viewport),
-  getImage: () => image,
-  getProject: () => project,
-  getSelectedPointId: () => (selectedEntityType === 'point' ? selectedEntityId : null),
-  getSelectedEntity: () => ({ id: selectedEntityId, type: selectedEntityType }),
-  getPendingPointIds: () => pendingPointIds.slice(),
-  getMode: () => mode,
-  // Test-only: loads a synthetic Blob through the normal loadFile path,
-  // standing in for the file-input picker that automated tools cannot drive.
-  loadBlob: (blob) => loadFile(blob),
-  // Test-only: exercises the magnifier's own show/position/draw path
-  // directly, since a real pointer drag cannot be scripted (setPointerCapture
-  // rejects synthetic PointerEvents, and left_click_drag is atomic).
-  testShowMagnifier: (viewPoint, imagePoint) => showMagnifierAt(viewPoint, imagePoint),
-  testHideMagnifier: () => hideMagnifier(),
-};
