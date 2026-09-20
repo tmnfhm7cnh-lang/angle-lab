@@ -4,7 +4,11 @@
  * how a value is derived on read.
  */
 
+import { isValidUnit } from './units.js';
+
 export const SCHEMA_VERSION = 1;
+
+export const DEFAULT_DISPLAY_UNIT = 'cm';
 
 let fallbackCounter = 0;
 
@@ -37,7 +41,17 @@ export function createProject({ subjectCode = '', title = '' } = {}) {
     measurements: [],
     annotations: [],
     calibration: null,
+    // The unit every real length is READ in, independent of the unit the
+    // calibration reference was ENTERED in — see measurements.js.
+    displayUnit: DEFAULT_DISPLAY_UNIT,
   };
+}
+
+export function setDisplayUnit(project, unit) {
+  if (!isValidUnit(unit)) return false;
+  project.displayUnit = unit;
+  touch(project);
+  return true;
 }
 
 export function addImage(project, { blobKey, width, height, exifOrientation = 0, capturedAt = null } = {}) {
@@ -175,5 +189,11 @@ export function deserialize(data) {
   if (data.schemaVersion !== SCHEMA_VERSION) {
     throw new Error(`Unknown schema version: ${data.schemaVersion}`);
   }
-  return JSON.parse(JSON.stringify(data));
+  const project = JSON.parse(JSON.stringify(data));
+  // displayUnit was added after the schema was first written. Nothing is
+  // persisted yet, so there is no stored project to migrate; defaulting a
+  // missing or invalid value here keeps the version at 1 instead of forcing
+  // a breaking bump for a field that has a safe default.
+  if (!isValidUnit(project.displayUnit)) project.displayUnit = DEFAULT_DISPLAY_UNIT;
+  return project;
 }

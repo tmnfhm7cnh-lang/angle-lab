@@ -6,7 +6,16 @@
 
 import { distance, angleAtVertex, signedAngleAtVertex, lineOrientation } from './geometry.js';
 import { millimetresPerPixel, pixelsToReal, isCalibrated } from './calibration.js';
+import { isValidUnit } from './units.js';
 import { getPoint } from './model.js';
+
+// The unit a real length is READ in. It is the project's display unit, not
+// the unit the calibration reference was ENTERED in: a 1 m reference must
+// still be able to read a forearm in centimetres.
+function displayUnitFor(project, calibration) {
+  if (isValidUnit(project.displayUnit)) return project.displayUnit;
+  return calibration ? calibration.unit : undefined;
+}
 
 function findMeasurement(project, measurementId) {
   return project.measurements.find((m) => m.id === measurementId) || null;
@@ -14,16 +23,15 @@ function findMeasurement(project, measurementId) {
 
 function realValueFor(project, imageId, pixels) {
   const calibration = project.calibration;
-  if (!calibration || calibration.imageId !== imageId) {
-    return { real: NaN, unit: calibration ? calibration.unit : undefined };
-  }
+  const unit = displayUnitFor(project, calibration);
+  if (!calibration || calibration.imageId !== imageId) return { real: NaN, unit };
   const refA = getPoint(project, calibration.aId);
   const refB = getPoint(project, calibration.bId);
-  if (!refA || !refB) return { real: NaN, unit: calibration.unit };
+  if (!refA || !refB) return { real: NaN, unit };
   const refPixelLength = distance(refA, refB);
   const mmPerPixel = millimetresPerPixel(calibration.realLength, calibration.unit, refPixelLength);
-  if (!isCalibrated(mmPerPixel)) return { real: NaN, unit: calibration.unit };
-  return { real: pixelsToReal(pixels, mmPerPixel, calibration.unit), unit: calibration.unit };
+  if (!isCalibrated(mmPerPixel)) return { real: NaN, unit };
+  return { real: pixelsToReal(pixels, mmPerPixel, unit), unit };
 }
 
 export function evaluateAngle(project, measurementId) {

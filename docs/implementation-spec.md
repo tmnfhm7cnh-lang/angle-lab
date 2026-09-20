@@ -345,7 +345,7 @@ Finish each phase with tests passing before starting the next.
 | **F3** | `index.html`, canvas, load photo from library or camera, pinch-zoom and pan | A portrait iPhone photo appears upright and correctly sized; zoom holds the anchor under the fingers |
 | **F4** | Point tool: create, select, drag, delete, with magnifier | A point stays on the same anatomical feature after zooming, panning and rotating the device |
 | **F5** | Segments, angles, distances in pixels, with overlay rendering | **Usable milestone.** Three points on a photo read a live angle that updates while dragging |
-| **F6** | Calibrate tool and real-world distances | A known 1 m reference makes a second measurement read the correct length in cm, mm, m and in |
+| **F6** | Calibrate tool and real-world distances — **full spec in §7** | A known 1 m reference makes a second measurement read the correct length in cm, mm, m and in |
 | **F7** | Text annotations, IndexedDB persistence, PNG export | An analysis survives a full app restart; the exported PNG matches what is on screen at full resolution |
 | **F8** | `manifest.json`, service worker, offline, installable | Installs to the iPhone home screen and opens with no network |
 
@@ -367,3 +367,159 @@ phase done. State plainly which of the two was used — a phase verified only in
 not verified for iOS.
 
 Do not report a phase complete on the grounds that it compiles or that the code looks right.
+
+---
+
+## 7. Phase F6 — calibrate tool and real-world units
+
+**Everything the mathematics needs already exists and is tested**: `core/units.js`,
+`core/calibration.js`, `model.setCalibration/clearCalibration`, the cascade that drops the
+calibration when one of its reference points is deleted, and `measurements.realValueFor`, which
+already turns a pixel length into a real one. `canvasRenderer.drawDistances` already prints the real
+length when it is finite. F6 is therefore a UI phase plus **one small, necessary core change**.
+
+### 7.1 The core change: display unit is not the calibration unit
+
+`realValueFor` currently returns the length in `calibration.unit` — the unit the reference was
+entered in. That makes F6's acceptance criterion unreachable: a 1 m reference entered in metres can
+only ever read metres, so a 12 cm forearm displays as `0.1 m`. The unit a length is *entered* in and
+the unit it is *read* in are different concerns, and `pixelsToReal(pixels, mmPerPixel, targetUnit)`
+was already written to take a target unit — nothing else in `calibration.js` changes.
+
+Add to `core/model.js`:
+
+```js
+// createProject(): new field, alongside the existing ones
+displayUnit: 'cm'          // one of UNITS; the unit every real length is READ in
+
+export function setDisplayUnit(project, unit)
+  // sets project.displayUnit and updatedAt; ignores the call and returns false
+  // if !isValidUnit(unit); returns true otherwise
+```
+
+`deserialize` must default `displayUnit` to `'cm'` when the field is absent, and `SCHEMA_VERSION`
+stays at **1**: nothing is persisted yet (that is F7), so no saved project exists that could need
+migrating. Adding a defaulted field is not a breaking schema change.
+
+Change `realValueFor` in `core/measurements.js` so the target unit is the project's display unit:
+
+```js
+const targetUnit = isValidUnit(project.displayUnit) ? project.displayUnit : calibration.unit;
+return { real: pixelsToReal(pixels, mmPerPixel, targetUnit), unit: targetUnit };
+```
+
+The `unit` returned in the uncalibrated branches must follow the same rule, so a caller never sees a
+unit that disagrees with the one it would get once calibrated.
+
+**Tests (add to `test/measurements.test.js`):** calibrate 100 cm over 734 px, then a 367 px distance
+reads `50 cm`, `500 mm`, `0.5 m` and `19.685 in` as `displayUnit` changes, with **no other mutation
+in between** — only the display unit moves. Setting an invalid display unit leaves the previous one
+in place and the reading unchanged. An uncalibrated project still reports `NaN` for `real` whatever
+the display unit is.
+
+### 7.2 Calibrate tool
+
+A sixth tool button, `data-tool="calibrate"`, in the existing `#tool-group`. It behaves **exactly
+like the Distance tool** for picking: tap two existing points, in order, and reuse the existing
+`pendingPointIds` machinery — including `pendingSnapshotBeforeClaim`, so a second finger landing
+mid-tap restores the pick, same as F5. Do not invent a second pending mechanism.
+
+Two differences from Distance:
+
+1. On the second tap the tool does not create a measurement; it opens the length panel (§7.3) and
+   waits. The calibration is written **only when the panel is confirmed**.
+2. `requiredPointCount('calibrate')` is 2, and `isMeasurementMode` must **not** route it into
+   `finishPendingMeasurement` — give it its own branch.
+
+If the two picked points are at the same position (zero pixel length), refuse: show the panel's
+error line, keep the pick, and do not call `setCalibration`. `millimetresPerPixel` would return
+`NaN` and the app would silently look calibrated while every length read `NaN`.
+
+Setting a calibration when one already exists **replaces** it — `setCalibration` already overwrites
+`project.calibration`, and a single calibration per project is the model's design.
+
+### 7.3 The length panel
+
+A real HTML panel, not `window.prompt()`. `prompt()` blocks the main thread, cannot carry a unit
+selector, and is unreliable in an installed standalone PWA.
+
+```html
+<div id="calibration-panel" hidden>
+  <label>Reference length
+    <input id="calibration-length" type="number" inputmode="decimal" step="any" min="0" />
+  </label>
+  <select id="calibration-unit"><!-- mm cm m in, default cm --></select>
+  <p id="calibration-error" hidden></p>
+  <button id="calibration-confirm" type="button">Calibrate</button>
+  <button id="calibration-cancel" type="button">Cancel</button>
+</div>
+```
+
+- **Position it directly under `#top-bar`, anchored to the top.** When the iOS keyboard opens it
+  shrinks the visual viewport from the bottom; a panel centred or bottom-anchored ends up behind the
+  keyboard with no way to reach its Confirm button.
+- **Focus the input synchronously inside the pointer handler** that opens the panel. iOS Safari only
+  honours programmatic `focus()` inside a user-gesture handler — deferring it into
+  `requestAnimationFrame` or a `setTimeout` loses the keyboard.
+- Reject on confirm, with the error line and without closing: empty input, a value that is not a
+  finite number, and a value `<= 0`. Accept decimals with a dot; do not try to parse comma decimals,
+  the numeric keyboard produces a dot.
+- Cancel, and switching tools while the panel is open, close the panel and clear `pendingPointIds`
+  without writing a calibration.
+- The panel must not swallow pointer events aimed at the canvas beneath it; it is an ordinary
+  absolutely-positioned element, and `#canvas-area` keeps its own gesture handling.
+
+### 7.4 Bar controls
+
+- `<select id="display-unit">` with mm / cm / m / in, calling `setDisplayUnit` then `scheduleRender`.
+  **Disabled while `project.calibration` is null** — an unusable control that changes nothing is a
+  bug report waiting to happen.
+- `<button id="clear-calibration-button">Clear calibration</button>`, calling `clearCalibration`.
+  Disabled when there is no calibration.
+- A short status readout next to the zoom readout: `1.36 mm/px` when calibrated, `uncalibrated`
+  otherwise. Compute it, do not store it — the reference points can be dragged and the scale must
+  follow them.
+
+Both controls live in `#top-bar`, which is already horizontally scrollable with `flex-shrink: 0`
+children (fixed 2026-09-16); adding elements to it must not break that.
+
+### 7.5 Rendering the calibration reference
+
+Draw the reference as its own overlay layer, **before** segments so measurements sit on top:
+
+- The line between the two reference points, in the halo-then-stroke convention of `drawHaloLine`,
+  but in a distinct colour (`#7cff6b`) and **dashed** (`setLineDash([6, 4])`) so it reads as a
+  reference and not as a measurement. Reset the dash afterwards — the canvas context is shared.
+- A label at its midpoint with the entered value in its entered unit, e.g. `ref 100 cm`, so the
+  number that defines the scale is always visible on the photo.
+- The overlay is built in `app.js` from `project.calibration` plus `getPoint`, and passed as
+  `overlay.calibration = { a, b, realLength, unit }` or `null`. `renderFrame` stays a pure function
+  of what it is handed.
+
+The reference points themselves are ordinary points: they stay draggable in Select mode, and
+dragging one rescales every real length on the next frame with no recompute call, because nothing is
+cached. **That is a feature to verify, not a hazard.**
+
+### 7.6 Distance label with a calibration
+
+Change `drawDistances`: when `dist.real` is finite, print **only** the real length
+(`formatLength(dist.real, dist.unit)`), not `px (real)`. On a phone-width screen the pixel count is
+noise next to the number the user actually asked for. Uncalibrated behaviour is unchanged: pixels
+alone. Segments keep their current label.
+
+### 7.7 Acceptance criteria
+
+Not "it compiles". Each of these is a check someone performs:
+
+1. The 208 existing tests still pass, plus the new `measurements` and `model` tests of §7.1.
+2. On a loaded photo: two points, Calibrate, enter `100`, unit `cm` → the dashed reference and
+   `ref 100 cm` appear, the status reads a plausible mm/px, and the display-unit selector becomes
+   enabled.
+3. A second Distance measurement over half that pixel length reads **50 cm**, and switching the
+   display unit reads **500 mm**, **0.5 m**, **19.7 in** — the same physical length, four ways.
+4. Dragging one reference point in Select mode changes every real length live, while dragging.
+5. Deleting a reference point clears the calibration (cascade), disables both new controls, and
+   every distance falls back to pixels — with no `NaN` printed anywhere on screen.
+6. In a 375×812 portrait emulation the panel is reachable with the keyboard open, and the two new
+   bar controls are reachable by scrolling `#top-bar` horizontally.
+7. Confirmed on the real iPhone before the phase is called done, per §6.
