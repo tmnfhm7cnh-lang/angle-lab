@@ -3,7 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="angle-lab" />
   <title>angle-lab</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
   <link rel="stylesheet" href="src/styles/app.css" />
 </head>
 <body>
@@ -28,9 +35,12 @@
       </div>
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
       <button id="protocol-button" class="bar-button" type="button">Protocol</button>
+      <button id="start-over-button" class="bar-button danger-button" type="button">Start over</button>
       <span id="zoom-readout" class="zoom-readout">100%</span>
     </header>
     <div id="disclaimer-bar">Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.</div>
+    <div id="error-bar" role="alert" hidden></div>
+    <div id="storage-bar" role="status" hidden></div>
     <main id="canvas-area">
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>

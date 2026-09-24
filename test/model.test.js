@@ -458,10 +458,25 @@ describe('serialize / deserialize', () => {
     assert.doesNotThrow(() => JSON.stringify(data));
   });
 
-  test('deserialize throws on an unknown schema version', () => {
+  test('deserialize throws a clear "no migration path" error on an unknown schema version', () => {
     const { project } = projectWithImage();
     const data = serialize(project);
     data.schemaVersion = 999;
-    assert.throws(() => deserialize(data));
+    assert.throws(() => deserialize(data), /No migration path from schema version 999 to \d+/);
+  });
+
+  test('deserialize accepts current-version data missing a field added since v1 shipped', () => {
+    // displayUnit and calibrations were both added without a schema bump
+    // (see model.js's MIGRATIONS comment) — this is the "defensive default"
+    // path, distinct from the real migration chain above, and is the one
+    // case where hand-built fixture data legitimately differs from what
+    // createProject() produces today.
+    const { project } = projectWithImage();
+    const data = serialize(project);
+    delete data.displayUnit;
+    delete data.calibrations;
+    const restored = deserialize(data);
+    assert.equal(restored.displayUnit, 'cm');
+    assert.deepEqual(restored.calibrations, {});
   });
 });

@@ -256,20 +256,36 @@ export function serialize(project) {
   return JSON.parse(JSON.stringify(project));
 }
 
+// LOTE 3 §4: a real migration path, written before anything is actually
+// persisted (IndexedDB lands in this same lote) rather than after the first
+// stored project is already stuck on an old shape. Each entry migrates data
+// FROM its own key version TO key+1; deserialize below walks the chain until
+// it reaches SCHEMA_VERSION, and throws immediately if a version has no
+// registered step — never guesses at what an unknown shape might mean.
+//
+// Empty today: SCHEMA_VERSION has been 1 since 2026-09-13 and nothing has
+// ever been written to a store, so there is no real upgrade to encode yet.
+// When it next moves — e.g. 1: (data) => { ...; data.schemaVersion = 2;
+// return data; } — add the step here instead of writing another one-off
+// defensive default inline.
+const MIGRATIONS = {};
+
 export function deserialize(data) {
-  if (data.schemaVersion !== SCHEMA_VERSION) {
-    throw new Error(`Unknown schema version: ${data.schemaVersion}`);
+  let project = JSON.parse(JSON.stringify(data));
+  while (project.schemaVersion !== SCHEMA_VERSION) {
+    const migrate = MIGRATIONS[project.schemaVersion];
+    if (!migrate) {
+      throw new Error(
+        `No migration path from schema version ${project.schemaVersion} to ${SCHEMA_VERSION}`
+      );
+    }
+    project = migrate(project);
   }
-  const project = JSON.parse(JSON.stringify(data));
-  // displayUnit was added after the schema was first written. Nothing is
-  // persisted yet, so there is no stored project to migrate; defaulting a
-  // missing or invalid value here keeps the version at 1 instead of forcing
-  // a breaking bump for a field that has a safe default.
+  // displayUnit and calibrations (below) were both added while SCHEMA_VERSION
+  // was still 1 — before either existed, nothing had ever been persisted, so
+  // this is a defensive default for a hand-built fixture, not a real
+  // upgrade path (that's what MIGRATIONS is for, above).
   if (!isValidUnit(project.displayUnit)) project.displayUnit = DEFAULT_DISPLAY_UNIT;
-  // calibration (singular, project-wide) became calibrations (per imageId)
-  // in the same LOTE 2 change — again nothing is persisted yet, so this is
-  // a defensive default plus a courtesy migration for any hand-built fixture
-  // still using the old shape, not a real-world upgrade path.
   if (!project.calibrations || typeof project.calibrations !== 'object') {
     project.calibrations = {};
     if (project.calibration && project.calibration.imageId) {

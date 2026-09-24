@@ -156,6 +156,33 @@ html, body {
   display: none;
 }
 
+/* LOTE 3: image-decode failures (§7) and storage-quota warnings (§3) both
+   use this pair — error is a hard red, storage a softer amber, both
+   dismissible unlike #disclaimer-bar, which is permanent by design. */
+#error-bar,
+#storage-bar {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+#error-bar[hidden],
+#storage-bar[hidden] {
+  display: none;
+}
+
+#error-bar {
+  background: #3a1414;
+  color: #ffb3b3;
+}
+
+#storage-bar {
+  background: #3a2e10;
+  color: #ffd98a;
+}
+
 #protocol-dialog {
   max-width: min(560px, 92vw);
   max-height: 85vh;

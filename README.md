@@ -8,7 +8,12 @@ on iPhone and iPad. No server, no accounts, no network — everything stays on t
 
 ## Status
 
-Phase 0 of 8. The geometry engine is implemented and tested; nothing is rendered yet.
+Core usable through F5 (points, segments, angles, distances), published. F6's calibration engine
+(real-world units) is implemented and tested but has no interface yet. LOTE 3 of the 2026-09-22
+audit added persistence (IndexedDB, resumes the last project on reload) and PWA installability
+(manifest, service worker, icon) — the two claims below are now actually true rather than
+aspirational. F6's interface, export and the aesthetic pass are still open; see
+`frentes/app-development/ESTADO.md` in the main system for the real up-to-date state.
 
 ## Documents
 

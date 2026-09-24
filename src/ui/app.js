@@ -1,5 +1,5 @@
 import { createViewport, fitImage, zoomAt, panBy, clampToBounds, viewToImage, viewToImageLength } from '../core/viewport.js';
-import { loadDisplayImage } from '../render/imageLoader.js';
+import { loadDisplayImage, decodeDisplayBitmap, MAX_DISPLAY_SIDE } from '../render/imageLoader.js';
 import { resizeCanvasBackingStore, renderFrame, renderMagnifierFrame } from '../render/canvasRenderer.js';
 import { attachPointerGestures } from './pointerGestures.js';
 import {
@@ -14,12 +14,24 @@ import {
   removeEntity,
   getCalibration,
   getPoint,
+  serialize,
+  deserialize,
 } from '../core/model.js';
 import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
 import { repeatabilityStats } from '../core/uncertainty.js';
 import { millimetresPerPixel, pixelsToReal, isCalibrated } from '../core/calibration.js';
 import { formatLength } from '../core/units.js';
+import {
+  saveActiveProject,
+  loadActiveProject,
+  saveBlob,
+  loadBlob,
+  clearAll,
+  requestPersistence,
+  estimateStorageRatio,
+  STORAGE_WARNING_RATIO,
+} from '../storage/db.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
 const MAGNIFIER_SIZE_CSS_PX = 120;
@@ -39,6 +51,9 @@ const repeatReadout = document.getElementById('repeat-readout');
 const protocolButton = document.getElementById('protocol-button');
 const protocolDialog = document.getElementById('protocol-dialog');
 const protocolCloseButton = document.getElementById('protocol-close-button');
+const startOverButton = document.getElementById('start-over-button');
+const errorBar = document.getElementById('error-bar');
+const storageBar = document.getElementById('storage-bar');
 
 // LOTE 2 §2.3(a): a static checklist plus what the app does and doesn't
 // guarantee — no ground truth here, just the physics of a single photo.
@@ -81,6 +96,102 @@ let justCreatedMeasurementId = null;
 // re-found, so there is nothing here for undo-on-cancel to protect.
 let repeatTaps = [];
 const REPEATABILITY_TAP_COUNT = 3;
+
+// LOTE 3 §3/§7: persistence, storage health and load-error reporting.
+function showError(message) {
+  errorBar.hidden = false;
+  errorBar.textContent = message;
+}
+
+function clearError() {
+  errorBar.hidden = true;
+  errorBar.textContent = '';
+}
+
+async function checkStorageHealth() {
+  const ratio = await estimateStorageRatio();
+  if (ratio === null || ratio < STORAGE_WARNING_RATIO) {
+    storageBar.hidden = true;
+    return;
+  }
+  storageBar.hidden = false;
+  storageBar.textContent =
+    `Device storage is ${Math.round(ratio * 100)}% full. Use "Start over" to free space, ` +
+    `or export what you need, before the browser evicts it on its own.`;
+}
+
+// Debounced autosave, flushed synchronously on backgrounding — same shape as
+// dryland-test-logger's LOTE 1 §1 fix, for the same reason: waiting out a
+// debounce risks losing the last edits if iOS kills the tab while hidden.
+const SAVE_DEBOUNCE_MS = 400;
+let saveTimer = null;
+let pendingSaveData = null;
+
+function scheduleSave() {
+  pendingSaveData = serialize(project);
+  if (saveTimer) return;
+  saveTimer = setTimeout(flushSave, SAVE_DEBOUNCE_MS);
+}
+
+function flushSave() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (!pendingSaveData) return;
+  const toSave = pendingSaveData;
+  pendingSaveData = null;
+  saveActiveProject(toSave).then((ok) => {
+    if (ok) checkStorageHealth();
+  });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushSave();
+});
+window.addEventListener('pagehide', flushSave);
+
+// Tracks the longest side (source pixels) the CURRENT image.displayBitmap
+// actually holds, so ensureDetailForZoom knows whether a redecode would buy
+// any real sharpness or would just re-decode the same resolution again.
+let currentDetailLongestSide = MAX_DISPLAY_SIDE;
+let detailDecodeInFlight = false;
+// Below this margin over the currently-held resolution, a redecode isn't
+// worth its cost — this session's own tolerance for "close enough", not a
+// measured constant (same spirit as model.js's MIN_CALIBRATION_REFERENCE_PX).
+const ZOOM_REDECODE_MARGIN = 1.5;
+// Conservative cap: 4096×4096 is 16.78M px, at the edge of the ~16.7M px
+// canvas-area limit older iOS Safari versions have enforced — a portrait or
+// landscape (non-square) photo capped on its longest side alone stays safely
+// under that total.
+const MAX_ZOOM_DISPLAY_SIDE = 4096;
+
+async function ensureDetailForZoom() {
+  if (!image?.originalBlob || detailDecodeInFlight) return;
+  const sourceLongestSide = Math.max(image.imageSize.width, image.imageSize.height);
+  const requiredSourceLongestSide = sourceLongestSide * viewport.scale * dpr;
+  const target = Math.min(MAX_ZOOM_DISPLAY_SIDE, sourceLongestSide);
+  if (target <= currentDetailLongestSide) return;
+  if (requiredSourceLongestSide <= currentDetailLongestSide * ZOOM_REDECODE_MARGIN) return;
+
+  detailDecodeInFlight = true;
+  try {
+    const nextBitmap = await decodeDisplayBitmap(image.originalBlob, image.imageSize, target);
+    if (!image) {
+      nextBitmap.close();
+      return;
+    }
+    const oldBitmap = image.displayBitmap;
+    image.displayBitmap = nextBitmap;
+    currentDetailLongestSide = Math.max(nextBitmap.width, nextBitmap.height);
+    oldBitmap.close();
+    scheduleRender();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    detailDecodeInFlight = false;
+  }
+}
 
 function isMeasurementMode(m) {
   return m === 'line' || m === 'angle' || m === 'distance';
@@ -173,18 +284,31 @@ function fitToScreen() {
 
 async function loadFile(file) {
   if (!file) return;
-  const { displayBitmap, imageSize } = await loadDisplayImage(file);
-  image = { displayBitmap, imageSize };
-  const imageRef = addImage(project, {
-    blobKey: file.name || 'local',
-    width: imageSize.width,
-    height: imageSize.height,
-  });
+  clearError();
+  let decoded;
+  try {
+    decoded = await loadDisplayImage(file);
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  const { displayBitmap, imageSize, originalBlob } = decoded;
+  if (image?.displayBitmap) image.displayBitmap.close();
+  image = { displayBitmap, imageSize, originalBlob };
+  currentDetailLongestSide = Math.max(displayBitmap.width, displayBitmap.height);
+  // LOTE 3 §3: the model no longer stores the filename anywhere (see below) —
+  // image.id (a UUID model.js already generates) is the only key IndexedDB
+  // ever sees for this photo's Blob.
+  const imageRef = addImage(project, { width: imageSize.width, height: imageSize.height });
   project.activeImageId = imageRef.id;
   selectedEntityId = null;
   selectedEntityType = null;
   pendingPointIds = [];
   fitToScreen();
+  scheduleSave();
+  saveBlob(imageRef.id, originalBlob).then((ok) => {
+    if (ok) checkStorageHealth();
+  });
 }
 
 fileInput.addEventListener('change', (event) => {
@@ -228,6 +352,7 @@ function deleteSelected() {
   selectedEntityId = null;
   selectedEntityType = null;
   scheduleRender();
+  scheduleSave();
 }
 
 deleteButton.addEventListener('click', deleteSelected);
@@ -309,6 +434,7 @@ function finishPendingMeasurement() {
   }
   selectedEntityId = created.id;
   selectedEntityType = type;
+  scheduleSave();
   return created;
 }
 
@@ -380,6 +506,7 @@ function onPointClaim(viewPoint, event) {
     selectedEntityType = 'point';
     justCreatedPointId = created.id;
     scheduleRender();
+    scheduleSave();
     return true;
   }
 
@@ -443,6 +570,7 @@ function onPointDragMove(viewPoint) {
   movePoint(project, draggingPointId, imagePoint.x, imagePoint.y, viewport.scale);
   if (magnifierPointerType !== 'pen') showMagnifierAt(viewPoint, imagePoint);
   scheduleRender();
+  scheduleSave();
 }
 
 function onPointDragEnd(point, event) {
@@ -457,6 +585,7 @@ function onPointDragEnd(point, event) {
   // LINE/ANGLE/DISTANCE tap that picked a point, or completed a measurement,
   // right before a second finger landed.
   if (event?.type === 'pointerdown') {
+    let undidSomething = false;
     if (justCreatedPointId) {
       removePoint(project, justCreatedPointId);
       if (selectedEntityId === justCreatedPointId) {
@@ -464,6 +593,7 @@ function onPointDragEnd(point, event) {
         selectedEntityType = null;
       }
       scheduleRender();
+      undidSomething = true;
     }
     if (justCreatedMeasurementId) {
       removeEntity(project, justCreatedMeasurementId);
@@ -471,6 +601,7 @@ function onPointDragEnd(point, event) {
         selectedEntityId = null;
         selectedEntityType = null;
       }
+      undidSomething = true;
     }
     if (pendingSnapshotBeforeClaim !== null) {
       // Restore exactly the array pendingPointIds held before this claim —
@@ -479,6 +610,7 @@ function onPointDragEnd(point, event) {
       pendingPointIds = pendingSnapshotBeforeClaim;
     }
     scheduleRender();
+    if (undidSomething) scheduleSave();
   }
   justCreatedPointId = null;
   pendingSnapshotBeforeClaim = null;
@@ -503,12 +635,81 @@ attachPointerGestures(canvas, {
     if (!image) return;
     viewport = clampToBounds(viewport, image.imageSize, cssSize());
     scheduleRender();
+    ensureDetailForZoom();
   },
   onPointClaim,
   onPointDragMove,
   onPointDragEnd,
 });
 
+// pointerGestures' onGestureEnd only fires when a touch/pointer lifts — a
+// wheel/trackpad zoom (its own "desktop testing" affordance, see that
+// module's doc) never lifts a pointer, so it would otherwise never trigger a
+// detail redecode. A short idle timer after the last wheel tick stands in
+// for that missing "gesture end".
+let wheelIdleTimer = null;
+canvas.addEventListener('wheel', () => {
+  clearTimeout(wheelIdleTimer);
+  wheelIdleTimer = setTimeout(ensureDetailForZoom, 220);
+}, { passive: true });
+
+startOverButton.addEventListener('click', async () => {
+  if (!confirm('Delete everything saved on this device (photos, points, measurements)? This cannot be undone.')) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  pendingSaveData = null;
+  await clearAll();
+  if (image?.displayBitmap) image.displayBitmap.close();
+  image = null;
+  project = createProject();
+  viewport = createViewport();
+  currentDetailLongestSide = MAX_DISPLAY_SIDE;
+  selectedEntityId = null;
+  selectedEntityType = null;
+  pendingPointIds = [];
+  clearError();
+  storageBar.hidden = true;
+  scheduleRender();
+});
+
 new ResizeObserver(resizeCanvas).observe(canvas);
 resizeCanvas();
 setupMagnifierCanvas();
+
+// LOTE 3 §3: resume the last active project on load, one image at a time —
+// only the active image's bitmap is ever rendered today (there is no
+// switch-image UI yet, see db.js's module doc), so restoring just that one
+// blob is all a startup actually needs.
+async function restoreProject() {
+  const data = await loadActiveProject();
+  if (!data) return;
+  let restored;
+  try {
+    restored = deserialize(data);
+  } catch (err) {
+    console.warn('angle-lab: saved project could not be restored', err);
+    return;
+  }
+  project = restored;
+  const activeImage = project.images.find((img) => img.id === project.activeImageId);
+  if (!activeImage) return;
+  const blob = await loadBlob(activeImage.id);
+  if (!blob) return; // project metadata survived; its photo's Blob did not
+  try {
+    const { displayBitmap, imageSize, originalBlob } = await loadDisplayImage(blob);
+    image = { displayBitmap, imageSize, originalBlob };
+    currentDetailLongestSide = Math.max(displayBitmap.width, displayBitmap.height);
+    fitToScreen();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+requestPersistence();
+restoreProject().then(checkStorageHealth);
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch((err) => console.warn('sw', err));
+}
