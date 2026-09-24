@@ -10,6 +10,14 @@
 
 import { DEG_TO_RAD } from './geometry.js';
 
+// Shared with zoomAt's own defaults: fitImage must clamp to the same range,
+// or a degenerate viewSize (a collapsed canvas mid-layout, a hidden pane)
+// can hand out a scale zoomAt would never have produced on its own —
+// negative for a viewSize smaller than the image, or exactly 0 at the point
+// where availableWidth/availableHeight crosses zero.
+export const MIN_SCALE = 0.05;
+export const MAX_SCALE = 50;
+
 export function createViewport({ scale = 1, tx = 0, ty = 0, rotation = 0 } = {}) {
   return { scale, tx, ty, rotation };
 }
@@ -51,13 +59,18 @@ export function viewToImageLength(len, vp) {
 export function fitImage(imageSize, viewSize, padding = 0) {
   const availableWidth = viewSize.width - 2 * padding;
   const availableHeight = viewSize.height - 2 * padding;
-  const scale = Math.min(availableWidth / imageSize.width, availableHeight / imageSize.height);
+  const rawScale = Math.min(availableWidth / imageSize.width, availableHeight / imageSize.height);
+  // A collapsed canvas (viewSize/padding leaving ~0 available space) makes
+  // rawScale exactly 0 or negative. Clamped to the same range zoomAt uses:
+  // unclamped, a 0 scale sends viewToImage to NaN (division by zero) and a
+  // negative scale mirrors the photo, silently flipping every signed angle.
+  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, rawScale));
   const tx = (viewSize.width - imageSize.width * scale) / 2;
   const ty = (viewSize.height - imageSize.height * scale) / 2;
   return createViewport({ scale, tx, ty, rotation: 0 });
 }
 
-export function zoomAt(vp, viewAnchor, factor, { minScale = 0.05, maxScale = 50 } = {}) {
+export function zoomAt(vp, viewAnchor, factor, { minScale = MIN_SCALE, maxScale = MAX_SCALE } = {}) {
   const newScale = Math.min(maxScale, Math.max(minScale, vp.scale * factor));
   const imageAnchor = viewToImage(viewAnchor, vp);
   const rescaled = createViewport({ scale: newScale, tx: 0, ty: 0, rotation: vp.rotation });
@@ -75,11 +88,28 @@ export function panBy(vp, dxView, dyView) {
 }
 
 /**
+ * Recovers a viewport that has gone non-finite — `scale`, `tx` or `ty` is
+ * NaN or +-Infinity. This happens downstream of a zero/negative scale that
+ * slipped past fitImage/zoomAt (viewToImage divides by scale) and, once it
+ * happens, every corner computed from the viewport is also non-finite, so
+ * clampToBounds's own min/max logic can't repair it — there is nothing
+ * finite to compare against. Refitting to the image is the only recovery
+ * that doesn't need a finite starting point.
+ */
+export function sanitizeViewport(vp, imageSize, viewSize) {
+  if (Number.isFinite(vp.scale) && vp.scale > 0 && Number.isFinite(vp.tx) && Number.isFinite(vp.ty)) {
+    return vp;
+  }
+  return fitImage(imageSize, viewSize, 16);
+}
+
+/**
  * Nudges the viewport so at least `minVisible` view pixels of the image's
  * (rotated) bounding box stay on screen along each axis. Not a hard fit —
  * it only pulls back a viewport that has drifted the image entirely away.
  */
 export function clampToBounds(vp, imageSize, viewSize, minVisible = 40) {
+  vp = sanitizeViewport(vp, imageSize, viewSize);
   const corners = [
     { x: 0, y: 0 },
     { x: imageSize.width, y: 0 },

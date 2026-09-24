@@ -25,10 +25,11 @@ export function convert(value, fromUnit, toUnit) {
 }
 
 export function formatLength(value, unit, decimals = 1) {
+  if (!Number.isFinite(value)) return '—';
   return `${value.toFixed(decimals)} ${unit}`;
 }
 
 export function formatAngle(degrees, decimals = 1) {
-  if (Number.isNaN(degrees)) return '—';
+  if (!Number.isFinite(degrees)) return '—';
   return `${degrees.toFixed(decimals)}°`;
 }

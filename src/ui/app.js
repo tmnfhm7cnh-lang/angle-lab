@@ -12,9 +12,14 @@ import {
   addAngle,
   addDistance,
   removeEntity,
+  getCalibration,
+  getPoint,
 } from '../core/model.js';
 import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
+import { repeatabilityStats } from '../core/uncertainty.js';
+import { millimetresPerPixel, pixelsToReal, isCalibrated } from '../core/calibration.js';
+import { formatLength } from '../core/units.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
 const MAGNIFIER_SIZE_CSS_PX = 120;
@@ -30,6 +35,15 @@ const toolButtons = Array.from(document.querySelectorAll('.tool-button[data-tool
 const deleteButton = document.getElementById('delete-selected-button');
 const magnifierCanvas = document.getElementById('magnifier');
 const magnifierCtx = magnifierCanvas.getContext('2d');
+const repeatReadout = document.getElementById('repeat-readout');
+const protocolButton = document.getElementById('protocol-button');
+const protocolDialog = document.getElementById('protocol-dialog');
+const protocolCloseButton = document.getElementById('protocol-close-button');
+
+// LOTE 2 §2.3(a): a static checklist plus what the app does and doesn't
+// guarantee — no ground truth here, just the physics of a single photo.
+protocolButton.addEventListener('click', () => protocolDialog.showModal());
+protocolCloseButton.addEventListener('click', () => protocolDialog.close());
 
 let image = null;
 let viewport = createViewport();
@@ -61,6 +75,12 @@ let pendingPointIds = [];
 // See onPointDragEnd.
 let pendingSnapshotBeforeClaim = null;
 let justCreatedMeasurementId = null;
+// LOTE 2 §2.2, the repeatability lab: taps collected while mode === 'repeat'.
+// These never touch the project model — they are not a measurement of
+// anything in the photo, only of how consistently the same landmark can be
+// re-found, so there is nothing here for undo-on-cancel to protect.
+let repeatTaps = [];
+const REPEATABILITY_TAP_COUNT = 3;
 
 function isMeasurementMode(m) {
   return m === 'line' || m === 'angle' || m === 'distance';
@@ -183,8 +203,11 @@ function setMode(nextMode) {
   mode = nextMode;
   // Switching tools abandons any in-progress LINE/ANGLE/DISTANCE pick —
   // there is no well-defined meaning for a pending point picked under one
-  // tool once a different tool is active.
+  // tool once a different tool is active. Same for an in-progress
+  // repeatability run.
   pendingPointIds = [];
+  repeatTaps = [];
+  repeatReadout.hidden = true;
   for (const button of toolButtons) {
     button.classList.toggle('active', button.dataset.tool === mode);
   }
@@ -275,20 +298,83 @@ function finishPendingMeasurement() {
     type = 'angle';
   }
   pendingPointIds = [];
+  // addSegment/addAngle/addDistance return null if the picked points turn
+  // out not to share an image (LOTE 2 §2.1) — not reachable through this
+  // UI today, since hitTest only ever offers points from activeImageId, but
+  // cheap to guard rather than assume that stays true forever.
+  if (!created) {
+    selectedEntityId = null;
+    selectedEntityType = null;
+    return null;
+  }
   selectedEntityId = created.id;
   selectedEntityType = type;
   return created;
+}
+
+// Real-world sigma for the repeatability readout, following the same rule
+// evaluateDistance/evaluateSegment use: pixels if this image has no
+// calibration yet (true for every image today — F6's interface isn't built),
+// the project's display unit once it does.
+function repeatabilityRealSigma(pixelSigma) {
+  const calibration = getCalibration(project, project.activeImageId);
+  if (!calibration) return null;
+  const refA = getPoint(project, calibration.aId);
+  const refB = getPoint(project, calibration.bId);
+  if (!refA || !refB) return null;
+  const mmPerPixel = millimetresPerPixel(
+    calibration.realLength,
+    calibration.unit,
+    Math.hypot(refB.x - refA.x, refB.y - refA.y),
+  );
+  if (!isCalibrated(mmPerPixel)) return null;
+  return pixelsToReal(pixelSigma, mmPerPixel, project.displayUnit);
+}
+
+// LOTE 2 §2.2, "un laboratorio de repetibilidad": tap the same landmark
+// REPEATABILITY_TAP_COUNT times, blind (no crosshair carried over between
+// taps — that would defeat the point), and read back how much they actually
+// disagree. This is the one number in the whole feature that is measured
+// rather than modelled (see uncertainty.js's module doc).
+function handleRepeatabilityTap(imagePoint) {
+  repeatTaps.push(imagePoint);
+  if (repeatTaps.length < REPEATABILITY_TAP_COUNT) {
+    repeatReadout.hidden = false;
+    repeatReadout.textContent = `Tap the same point ${REPEATABILITY_TAP_COUNT - repeatTaps.length} more time${
+      REPEATABILITY_TAP_COUNT - repeatTaps.length === 1 ? '' : 's'
+    }.`;
+    return;
+  }
+  const stats = repeatabilityStats(repeatTaps);
+  const realSigma = repeatabilityRealSigma(stats.rmsPx);
+  const realText = realSigma !== null ? ` (${formatLength(realSigma, project.displayUnit, 2)})` : '';
+  repeatReadout.hidden = false;
+  repeatReadout.textContent =
+    `Your own repeatability: ±${stats.rmsPx.toFixed(1)} px${realText} typical, ` +
+    `${stats.maxDeviationPx.toFixed(1)} px worst of ${REPEATABILITY_TAP_COUNT} taps. ` +
+    `Tap again to redo.`;
+  repeatTaps = [];
 }
 
 function onPointClaim(viewPoint, event) {
   if (!image || !project.activeImageId) return false;
   const imagePoint = viewToImage(viewPoint, viewport);
 
+  if (mode === 'repeat') {
+    handleRepeatabilityTap(imagePoint);
+    scheduleRender();
+    return true;
+  }
+
   if (mode === 'point') {
     const created = addPoint(project, {
       imageId: project.activeImageId,
       x: imagePoint.x,
       y: imagePoint.y,
+      // The zoom this point was placed at — uncertainty.js turns it into an
+      // image-pixel error for the sigma shown on every angle/distance that
+      // uses this point (LOTE 2 §2.2).
+      placementScale: viewport.scale,
     });
     selectedEntityId = created.id;
     selectedEntityType = 'point';
@@ -309,7 +395,8 @@ function onPointClaim(viewPoint, event) {
     if (hit && hit.type === 'point' && !pendingPointIds.includes(hit.id)) {
       pendingPointIds.push(hit.id);
       if (pendingPointIds.length === requiredPointCount(mode)) {
-        justCreatedMeasurementId = finishPendingMeasurement().id;
+        const created = finishPendingMeasurement();
+        justCreatedMeasurementId = created ? created.id : null;
       }
     } else if (!hit) {
       pendingPointIds = [];
@@ -353,7 +440,7 @@ function onPointClaim(viewPoint, event) {
 function onPointDragMove(viewPoint) {
   if (!draggingPointId) return;
   const imagePoint = viewToImage(viewPoint, viewport);
-  movePoint(project, draggingPointId, imagePoint.x, imagePoint.y);
+  movePoint(project, draggingPointId, imagePoint.x, imagePoint.y, viewport.scale);
   if (magnifierPointerType !== 'pen') showMagnifierAt(viewPoint, imagePoint);
   scheduleRender();
 }

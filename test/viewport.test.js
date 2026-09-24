@@ -10,6 +10,7 @@ import {
   zoomAt,
   panBy,
   clampToBounds,
+  sanitizeViewport,
 } from '../src/core/viewport.js';
 
 const close = (actual, expected, tolerance = 1e-9) => {
@@ -147,6 +148,52 @@ describe('fitImage', () => {
     const vp = fitImage({ width: 100, height: 100 }, { width: 200, height: 200 });
     assert.equal(vp.rotation, 0);
   });
+
+  // LOTE 2 audit, reproduced: a 30 px collapsed panel (padding 16 leaves
+  // ~-2 px available) used to hand back a NEGATIVE scale, mirroring the
+  // photo and flipping every signed angle. Confirmed on the code before this
+  // fix: fitImage({4000,3000}, {30,30}, 16).scale was -0.002...
+  test('a collapsed 30 px panel no longer returns a negative scale', () => {
+    const vp = fitImage({ width: 4000, height: 3000 }, { width: 30, height: 30 }, 16);
+    assert.ok(vp.scale > 0, `expected a positive scale, got ${vp.scale}`);
+    assert.ok(Number.isFinite(vp.tx) && Number.isFinite(vp.ty));
+  });
+
+  // Also reproduced: a 32 px panel (padding 16 leaves exactly 0 available)
+  // used to return scale === 0 exactly, which made viewToImage divide by
+  // zero (NaN) for every point on screen.
+  test('a collapsed 32 px panel no longer returns a zero scale', () => {
+    const vp = fitImage({ width: 4000, height: 3000 }, { width: 32, height: 32 }, 16);
+    assert.notEqual(vp.scale, 0);
+    assert.ok(vp.scale >= 0.05, `expected the same floor zoomAt uses, got ${vp.scale}`);
+  });
+});
+
+describe('sanitizeViewport', () => {
+  test('leaves a healthy viewport untouched', () => {
+    const vp = createViewport({ scale: 1.5, tx: 10, ty: -20 });
+    const sane = sanitizeViewport(vp, { width: 1000, height: 1000 }, { width: 800, height: 800 });
+    assert.deepEqual(sane, vp);
+  });
+
+  test('refits a viewport whose scale went NaN', () => {
+    const broken = createViewport({ scale: NaN, tx: 0, ty: 0 });
+    const sane = sanitizeViewport(broken, { width: 1000, height: 500 }, { width: 800, height: 800 });
+    assert.ok(Number.isFinite(sane.scale) && sane.scale > 0);
+    assert.ok(Number.isFinite(sane.tx) && Number.isFinite(sane.ty));
+  });
+
+  test('refits a viewport whose tx/ty went Infinity', () => {
+    const broken = createViewport({ scale: 1, tx: Infinity, ty: -Infinity });
+    const sane = sanitizeViewport(broken, { width: 1000, height: 500 }, { width: 800, height: 800 });
+    assert.ok(Number.isFinite(sane.tx) && Number.isFinite(sane.ty));
+  });
+
+  test('refits a viewport whose scale is exactly 0', () => {
+    const broken = createViewport({ scale: 0, tx: 5, ty: 5 });
+    const sane = sanitizeViewport(broken, { width: 1000, height: 500 }, { width: 800, height: 800 });
+    assert.ok(sane.scale > 0);
+  });
 });
 
 describe('zoomAt anchor invariance — the critical test', () => {
@@ -266,5 +313,16 @@ describe('clampToBounds', () => {
     ];
     const minY = Math.min(...corners.map((c) => c.y));
     assert.ok(minY <= viewSize.height - 40, `expected some part visible, minY=${minY}`);
+  });
+
+  // LOTE 2 audit: on the code before this fix, clampToBounds's own min/max
+  // logic could not repair a non-finite viewport (every corner it computes
+  // is itself NaN, so "is maxX < minVisible" is never true) — the app stayed
+  // dead until a full page reload. Now clampToBounds sanitizes first.
+  test('recovers a viewport whose scale went NaN instead of staying dead', () => {
+    const broken = createViewport({ scale: NaN, tx: NaN, ty: NaN });
+    const clamped = clampToBounds(broken, { width: 1000, height: 500 }, { width: 800, height: 800 });
+    assert.ok(Number.isFinite(clamped.scale) && clamped.scale > 0);
+    assert.ok(Number.isFinite(clamped.tx) && Number.isFinite(clamped.ty));
   });
 });

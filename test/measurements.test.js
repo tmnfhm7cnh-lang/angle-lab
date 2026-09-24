@@ -288,4 +288,77 @@ describe('display unit', () => {
     movePoint(project, refB.id, 367, 0);
     close(evaluateDistance(project, measurement.id).real, 100, 1e-9);
   });
+
+  // LOTE 2 audit: loading a second photo used to leave the calibration
+  // pointing at the first photo's reference points — a distance on the new,
+  // uncalibrated photo would keep reporting a "real" value anyway.
+  test('a second image has no calibration of its own and reads NaN until it gets one', () => {
+    const { project, measurement } = calibratedSetup();
+    close(evaluateDistance(project, measurement.id).real, 50, 1e-9);
+
+    const image2 = addImage(project, { blobKey: 'b2', width: 1000, height: 1000 });
+    const a2 = addPoint(project, { imageId: image2.id, x: 0, y: 0 });
+    const b2 = addPoint(project, { imageId: image2.id, x: 367, y: 0 });
+    const m2 = addDistance(project, a2.id, b2.id);
+    assert.ok(Number.isNaN(evaluateDistance(project, m2.id).real));
+
+    // The first image's own measurement is unaffected by the second image
+    // existing at all.
+    close(evaluateDistance(project, measurement.id).real, 50, 1e-9);
+  });
+});
+
+// LOTE 2 audit §2.2: sigma (uncertainty) rides along with every angle and
+// length, derived from placementScale — the viewport zoom in effect when
+// each point was placed (see uncertainty.js). Precise per-pixel numbers are
+// covered in uncertainty.test.js; this only checks the wiring into
+// evaluateAngle/evaluateDistance/evaluateSegment.
+describe('uncertainty wiring', () => {
+  test('evaluateAngle reports sigmaDegrees and a quality verdict', () => {
+    const { project, image } = setup();
+    const a = addPoint(project, { imageId: image.id, x: 400, y: 0, placementScale: 1 });
+    const v = addPoint(project, { imageId: image.id, x: 0, y: 0, placementScale: 1 });
+    const c = addPoint(project, { imageId: image.id, x: 0, y: 400, placementScale: 1 });
+    const m = addAngle(project, a.id, v.id, c.id);
+    const result = evaluateAngle(project, m.id);
+    assert.ok(Number.isFinite(result.sigmaDegrees));
+    assert.ok(result.sigmaDegrees > 0);
+    assert.equal(typeof result.quality.level, 'string');
+  });
+
+  test('a short ray reports a worse (larger) sigma than a long one', () => {
+    const { project, image } = setup();
+    const v = addPoint(project, { imageId: image.id, x: 0, y: 0, placementScale: 1 });
+    const far = addPoint(project, { imageId: image.id, x: 0, y: 400, placementScale: 1 });
+    const short = addPoint(project, { imageId: image.id, x: 25, y: 0, placementScale: 1 });
+    const long = addPoint(project, { imageId: image.id, x: 400, y: 0, placementScale: 1 });
+    const shortAngle = evaluateAngle(project, addAngle(project, short.id, v.id, far.id).id);
+    const longAngle = evaluateAngle(project, addAngle(project, long.id, v.id, far.id).id);
+    assert.ok(shortAngle.sigmaDegrees > longAngle.sigmaDegrees);
+  });
+
+  test('evaluateDistance and evaluateSegment report sigma in pixels when uncalibrated', () => {
+    const { project, image } = setup();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0, placementScale: 1 });
+    const b = addPoint(project, { imageId: image.id, x: 100, y: 0, placementScale: 1 });
+    const d = evaluateDistance(project, addDistance(project, a.id, b.id).id);
+    const s = evaluateSegment(project, addSegment(project, a.id, b.id).id);
+    assert.ok(Number.isFinite(d.sigma) && d.sigma > 0);
+    assert.ok(Number.isFinite(s.sigma) && s.sigma > 0);
+  });
+
+  test('evaluateDistance reports sigma in the display unit once calibrated', () => {
+    const { project, image } = setup();
+    const refA = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const refB = addPoint(project, { imageId: image.id, x: 734, y: 0 });
+    setCalibration(project, { imageId: image.id, aId: refA.id, bId: refB.id, realLength: 100, unit: 'cm' });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 100, placementScale: 1 });
+    const b = addPoint(project, { imageId: image.id, x: 367, y: 100, placementScale: 1 });
+    const measurement = addDistance(project, a.id, b.id);
+    const result = evaluateDistance(project, measurement.id);
+    // Calibrated: 100 cm over 734 px, so 1 px ~ 0.136 cm — the pixel-space
+    // sigma converts through the same scale the reading itself uses.
+    assert.ok(Number.isFinite(result.sigma) && result.sigma > 0);
+    assert.ok(result.sigma < 5, `expected a small cm-scale sigma, got ${result.sigma}`);
+  });
 });

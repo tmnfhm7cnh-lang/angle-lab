@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   SCHEMA_VERSION,
+  MIN_CALIBRATION_REFERENCE_PX,
   createProject,
   addImage,
   addPoint,
@@ -12,6 +13,7 @@ import {
   addAngle,
   addDistance,
   setCalibration,
+  getCalibration,
   clearCalibration,
   addAnnotation,
   updateAnnotation,
@@ -34,14 +36,14 @@ describe('createProject', () => {
     assert.equal('name' in project, false);
   });
 
-  test('defaults to empty collections and null calibration', () => {
+  test('defaults to empty collections and no calibrations', () => {
     const project = createProject();
     assert.deepEqual(project.images, []);
     assert.deepEqual(project.points, []);
     assert.deepEqual(project.segments, []);
     assert.deepEqual(project.measurements, []);
     assert.deepEqual(project.annotations, []);
-    assert.equal(project.calibration, null);
+    assert.deepEqual(project.calibrations, {});
     assert.equal(project.activeImageId, null);
   });
 
@@ -107,6 +109,81 @@ describe('addPoint / movePoint / getPoint', () => {
     const { project } = projectWithImage();
     assert.equal(getPoint(project, 'missing'), null);
   });
+
+  test('placementScale defaults to null and is stored when given', () => {
+    const { project, image } = projectWithImage();
+    const bare = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    assert.equal(bare.placementScale, null);
+    const zoomed = addPoint(project, { imageId: image.id, x: 0, y: 0, placementScale: 2.5 });
+    assert.equal(zoomed.placementScale, 2.5);
+  });
+
+  test('movePoint updates placementScale when given, leaves it alone otherwise', () => {
+    const { project, image } = projectWithImage();
+    const point = addPoint(project, { imageId: image.id, x: 0, y: 0, placementScale: 1 });
+    movePoint(project, point.id, 5, 5);
+    assert.equal(point.placementScale, 1);
+    movePoint(project, point.id, 6, 6, 3);
+    assert.equal(point.placementScale, 3);
+  });
+
+  // LOTE 2 audit: a NaN coordinate used to be accepted, and serialize()
+  // silently turned it into a stored 0 on the next read (JSON.stringify(NaN)
+  // is 'null', and null coerces to 0 in the arithmetic downstream) —
+  // reporting a distance that never existed.
+  describe('rejects non-finite coordinates', () => {
+    test('addPoint returns null for NaN/Infinity x or y, and adds nothing', () => {
+      const { project, image } = projectWithImage();
+      assert.equal(addPoint(project, { imageId: image.id, x: NaN, y: 0 }), null);
+      assert.equal(addPoint(project, { imageId: image.id, x: 0, y: Infinity }), null);
+      assert.equal(project.points.length, 0);
+    });
+
+    test('movePoint returns null for NaN/Infinity and leaves the point where it was', () => {
+      const { project, image } = projectWithImage();
+      const point = addPoint(project, { imageId: image.id, x: 10, y: 10 });
+      assert.equal(movePoint(project, point.id, NaN, 5), null);
+      assert.equal(point.x, 10);
+      assert.equal(point.y, 10);
+    });
+  });
+});
+
+describe('addSegment / addAngle / addDistance reject cross-image references', () => {
+  test('addSegment returns null and adds nothing when the two points are on different images', () => {
+    const { project, image } = projectWithImage();
+    const image2 = addImage(project, { blobKey: 'blob-2', width: 500, height: 500 });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image2.id, x: 0, y: 0 });
+    assert.equal(addSegment(project, a.id, b.id), null);
+    assert.equal(project.segments.length, 0);
+  });
+
+  test('addAngle returns null when any of the three points is on a different image', () => {
+    const { project, image } = projectWithImage();
+    const image2 = addImage(project, { blobKey: 'blob-2', width: 500, height: 500 });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const v = addPoint(project, { imageId: image.id, x: 1, y: 0 });
+    const c = addPoint(project, { imageId: image2.id, x: 1, y: 1 });
+    assert.equal(addAngle(project, a.id, v.id, c.id), null);
+    assert.equal(project.measurements.length, 0);
+  });
+
+  test('addDistance returns null across images', () => {
+    const { project, image } = projectWithImage();
+    const image2 = addImage(project, { blobKey: 'blob-2', width: 500, height: 500 });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image2.id, x: 0, y: 0 });
+    assert.equal(addDistance(project, a.id, b.id), null);
+  });
+
+  test('same-image references still work exactly as before', () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 1, y: 1 });
+    assert.ok(addSegment(project, a.id, b.id));
+    assert.ok(addDistance(project, a.id, b.id));
+  });
 });
 
 describe('cascade delete — removePoint', () => {
@@ -143,24 +220,27 @@ describe('cascade delete — removePoint', () => {
     assert.equal(project.measurements.find((m) => m.id === d.id), undefined);
   });
 
-  test('removing a calibration reference point clears the calibration', () => {
+  test('removing a calibration reference point clears that image\'s calibration', () => {
     const { project, image } = projectWithImage();
     const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
     setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' });
     removePoint(project, b.id);
-    assert.equal(project.calibration, null);
+    assert.equal(getCalibration(project, image.id), null);
   });
 
   test('no dangling references survive a full cascade across every entity type at once', () => {
     const { project, image } = projectWithImage();
+    // b/c are 20 px away rather than 1, so the calibration reference below
+    // clears MIN_CALIBRATION_REFERENCE_PX and setCalibration actually sets
+    // something for this test to cascade-delete.
     const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
-    const b = addPoint(project, { imageId: image.id, x: 1, y: 0 });
-    const c = addPoint(project, { imageId: image.id, x: 1, y: 1 });
+    const b = addPoint(project, { imageId: image.id, x: 20, y: 0 });
+    const c = addPoint(project, { imageId: image.id, x: 20, y: 20 });
     addSegment(project, a.id, b.id);
     addAngle(project, a.id, b.id, c.id);
     addDistance(project, a.id, c.id);
-    setCalibration(project, { imageId: image.id, aId: a.id, bId: c.id, realLength: 1, unit: 'm' });
+    assert.ok(setCalibration(project, { imageId: image.id, aId: a.id, bId: c.id, realLength: 1, unit: 'm' }));
 
     removePoint(project, a.id);
 
@@ -175,12 +255,12 @@ describe('cascade delete — removePoint', () => {
         assert.ok(survivingIds.has(m.aId) && survivingIds.has(m.bId));
       }
     }
-    if (project.calibration) {
-      assert.ok(survivingIds.has(project.calibration.aId) && survivingIds.has(project.calibration.bId));
-    }
+    // a was one of the calibration's own reference points, so it must be
+    // gone, not merely intact.
+    assert.equal(getCalibration(project, image.id), null);
 
     const serialized = serialize(project);
-    assert.equal(serialized.calibration, null);
+    assert.equal(serialized.calibrations[image.id], undefined);
   });
 
   test('removing a point that does not exist returns false and changes nothing', () => {
@@ -222,7 +302,7 @@ describe('addSegment / addAngle / addDistance', () => {
 });
 
 describe('calibration', () => {
-  test('setCalibration replaces any prior calibration', () => {
+  test('setCalibration replaces any prior calibration for that image', () => {
     const { project, image } = projectWithImage();
     const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
@@ -230,16 +310,77 @@ describe('calibration', () => {
     const c = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const d = addPoint(project, { imageId: image.id, x: 50, y: 0 });
     setCalibration(project, { imageId: image.id, aId: c.id, bId: d.id, realLength: 50, unit: 'cm' });
-    assert.equal(project.calibration.aId, c.id);
+    assert.equal(getCalibration(project, image.id).aId, c.id);
   });
 
-  test('clearCalibration sets it to null', () => {
+  test('clearCalibration removes just that image\'s entry', () => {
     const { project, image } = projectWithImage();
     const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
     setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' });
-    clearCalibration(project);
-    assert.equal(project.calibration, null);
+    clearCalibration(project, image.id);
+    assert.equal(getCalibration(project, image.id), null);
+  });
+
+  test('a second image does not inherit the first image\'s calibration', () => {
+    const { project, image } = projectWithImage();
+    const image2 = addImage(project, { blobKey: 'blob-2', width: 1000, height: 1000 });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' });
+    assert.equal(getCalibration(project, image2.id), null);
+
+    const c = addPoint(project, { imageId: image2.id, x: 0, y: 0 });
+    const d = addPoint(project, { imageId: image2.id, x: 200, y: 0 });
+    setCalibration(project, { imageId: image2.id, aId: c.id, bId: d.id, realLength: 2, unit: 'm' });
+    assert.equal(getCalibration(project, image.id).realLength, 1);
+    assert.equal(getCalibration(project, image2.id).realLength, 2);
+  });
+
+  test('rejects a non-positive or non-finite real length', () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 0, unit: 'm' }), null);
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: -3, unit: 'm' }), null);
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: NaN, unit: 'm' }), null);
+    assert.equal(getCalibration(project, image.id), null);
+  });
+
+  test('rejects an invalid unit ("furlong")', () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 3, unit: 'furlong' }), null);
+  });
+
+  test('rejects two coincident reference points', () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 50, y: 50 });
+    const b = addPoint(project, { imageId: image.id, x: 50, y: 50 });
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' }), null);
+  });
+
+  test(`rejects a reference shorter than ${MIN_CALIBRATION_REFERENCE_PX} px (a 2 px reference is unusable)`, () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 2, y: 0 });
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 50, unit: 'cm' }), null);
+  });
+
+  test('accepts a reference right at the minimum', () => {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: MIN_CALIBRATION_REFERENCE_PX, y: 0 });
+    assert.ok(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 50, unit: 'cm' }));
+  });
+
+  test('rejects reference points that belong to a different image than the one declared', () => {
+    const { project, image } = projectWithImage();
+    const image2 = addImage(project, { blobKey: 'blob-2', width: 1000, height: 1000 });
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image2.id, x: 100, y: 0 });
+    assert.equal(setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' }), null);
   });
 });
 
@@ -280,7 +421,7 @@ describe('removeEntity dispatch', () => {
     const b = addPoint(project, { imageId: image.id, x: 100, y: 0 });
     const calibration = setCalibration(project, { imageId: image.id, aId: a.id, bId: b.id, realLength: 1, unit: 'm' });
     assert.equal(removeEntity(project, calibration.id), true);
-    assert.equal(project.calibration, null);
+    assert.equal(getCalibration(project, image.id), null);
   });
 
   test('removing a point through removeEntity cascades exactly like removePoint', () => {

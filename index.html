@@ -24,15 +24,37 @@
         <button class="tool-button" data-tool="line" type="button">Line</button>
         <button class="tool-button" data-tool="angle" type="button">Angle</button>
         <button class="tool-button" data-tool="distance" type="button">Distance</button>
+        <button class="tool-button" data-tool="repeat" type="button">Repeatability</button>
       </div>
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
+      <button id="protocol-button" class="bar-button" type="button">Protocol</button>
       <span id="zoom-readout" class="zoom-readout">100%</span>
     </header>
+    <div id="disclaimer-bar">Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.</div>
     <main id="canvas-area">
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>
+      <div id="repeat-readout" hidden></div>
     </main>
   </div>
+  <dialog id="protocol-dialog">
+    <h2>Capture protocol</h2>
+    <ul>
+      <li>Camera <strong>perpendicular</strong> to the plane of the gesture being measured — a tilted plane biases every angle by up to several degrees and shortens every length.</li>
+      <li>Put the calibration reference <strong>in that same plane</strong>, at the subject's distance from the camera, not closer or farther.</li>
+      <li>Keep a reasonable <strong>minimum distance</strong> from the subject — close-up shots exaggerate perspective error.</li>
+      <li>Avoid the <strong>wide-angle</strong> lens/zoom level — wide angle increases perspective distortion at the frame edges.</li>
+    </ul>
+    <h2>What this measures, and what it doesn't</h2>
+    <p>angle-lab reads a <strong>projected</strong> angle and a <strong>scaled</strong> length off a single 2D photo. It does not reconstruct 3D geometry. Following the protocol above keeps the projection error small; it cannot remove it.</p>
+    <ul>
+      <li><strong>Angles</strong> are immune to distance/scale, but not to the gesture's plane being tilted relative to the camera: roughly up to 8&deg; of error at a 30&deg; tilt.</li>
+      <li><strong>Lengths</strong> need a correct scale (mm/px), which only holds in the plane of the calibration reference — a limb 30&nbsp;cm closer to or farther from the camera than that plane reads 20&ndash;38% off. A tilted (foreshortened) limb reads short: roughly 13% short at a 30&deg; tilt.</li>
+      <li>The on-screen quality colour (green/amber/red) reflects <strong>placement precision</strong> only — how exactly the points were tapped, at what zoom. It does not know about, and cannot warn about, camera tilt or distance.</li>
+      <li>angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
+    </ul>
+    <button id="protocol-close-button" class="bar-button" type="button">Close</button>
+  </dialog>
   <script type="module" src="src/ui/app.js"></script>
 </body>
 </html>

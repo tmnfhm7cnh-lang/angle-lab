@@ -12,6 +12,16 @@
 import { DEG_TO_RAD, subtract, magnitude } from '../core/geometry.js';
 import { imageToView } from '../core/viewport.js';
 import { formatAngle, formatLength } from '../core/units.js';
+import { decimalsForSigma } from '../core/uncertainty.js';
+
+// LOTE 2 §2.2: red/amber/green mirrors qualityForSigma's 'poor'/'ok'/'good'.
+// Selected entities keep their own highlight colour (drawn separately);
+// this only colours the reading label.
+const QUALITY_COLOR = { good: '#7cff6b', ok: '#ffd23f', poor: '#ff5f5f' };
+
+function qualityColor(quality) {
+  return QUALITY_COLOR[quality?.level] || '#fff';
+}
 
 const POINT_RADIUS = 6;
 const SELECTED_RING_RADIUS = 11;
@@ -95,7 +105,7 @@ function drawHaloLine(ctx, from, to, selected) {
   ctx.restore();
 }
 
-function drawLabel(ctx, view, text) {
+function drawLabel(ctx, view, text, color = '#fff') {
   ctx.save();
   ctx.font = LABEL_FONT;
   ctx.textAlign = 'center';
@@ -103,7 +113,7 @@ function drawLabel(ctx, view, text) {
   ctx.lineWidth = 3;
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.strokeText(text, view.x, view.y);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = color;
   ctx.fillText(text, view.x, view.y);
   ctx.restore();
 }
@@ -123,12 +133,15 @@ function drawDistances(ctx, viewport, distances, selectedId, selectedType) {
     drawHaloLine(ctx, aView, bView, selected);
 
     const mid = { x: (aView.x + bView.x) / 2, y: (aView.y + bView.y) / 2 };
-    // Real-world length is NaN until F6 adds calibration — show the pixel
-    // count alone rather than printing "NaN" on screen.
+    // Real-world length is NaN until a calibration exists for this image —
+    // show the pixel count alone rather than printing "NaN" on screen.
+    // Decimals come from sigma (LOTE 2 §2.2): a coarse reading no longer
+    // prints a false decimal of precision it doesn't have.
+    const decimals = decimalsForSigma(dist.sigma);
     const label = Number.isFinite(dist.real)
-      ? `${dist.pixels.toFixed(1)} px (${formatLength(dist.real, dist.unit)})`
+      ? `${dist.pixels.toFixed(1)} px (${formatLength(dist.real, dist.unit, decimals)})`
       : `${dist.pixels.toFixed(1)} px`;
-    drawLabel(ctx, { x: mid.x, y: mid.y - 12 }, label);
+    drawLabel(ctx, { x: mid.x, y: mid.y - 12 }, label, qualityColor(dist.quality));
   }
 }
 
@@ -186,7 +199,11 @@ function drawAngles(ctx, viewport, angles, selectedId, selectedType) {
         x: vertexView.x + bisector.x * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET),
         y: vertexView.y + bisector.y * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET),
       };
-      drawLabel(ctx, labelPos, formatAngle(angle.degrees));
+      // Decimals and colour both come from sigmaDegrees (LOTE 2 §2.2): a
+      // reading built from a short ray or a low zoom shows fewer decimals
+      // and reads amber/red rather than a falsely precise "127.4°".
+      const decimals = decimalsForSigma(angle.sigmaDegrees);
+      drawLabel(ctx, labelPos, formatAngle(angle.degrees, decimals), qualityColor(angle.quality));
     }
   }
 }

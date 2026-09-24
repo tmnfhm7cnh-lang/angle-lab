@@ -89,6 +89,20 @@ describe('formatLength', () => {
   test('respects the decimals argument', () => {
     assert.equal(formatLength(1.23456, 'm', 3), '1.235 m');
   });
+
+  // LOTE 2 audit: formatLength(NaN) used to print the literal string
+  // "NaN cm" on screen — a degenerate measurement dressed up as a number.
+  test('NaN renders as an em dash, not "NaN cm"', () => {
+    assert.equal(formatLength(NaN, 'cm'), '—');
+  });
+
+  // LOTE 2 audit: formatAngle(Infinity) used to print "Infinity°"; the same
+  // bug exists in formatLength for a distance between two coincident
+  // calibration points (division by a zero pixel span).
+  test('Infinity renders as an em dash, not "Infinity cm"', () => {
+    assert.equal(formatLength(Infinity, 'cm'), '—');
+    assert.equal(formatLength(-Infinity, 'cm'), '—');
+  });
 });
 
 describe('formatAngle', () => {
@@ -98,5 +112,13 @@ describe('formatAngle', () => {
 
   test('NaN renders as an em dash', () => {
     assert.equal(formatAngle(NaN), '—');
+  });
+
+  // LOTE 2 audit: formatAngle only guarded against NaN, not Infinity — a
+  // zero-length ray (angleAtVertex's own NaN guard aside, other paths can
+  // still divide down to +-Infinity) used to print the literal "Infinity°".
+  test('Infinity renders as an em dash, not "Infinity°"', () => {
+    assert.equal(formatAngle(Infinity), '—');
+    assert.equal(formatAngle(-Infinity), '—');
   });
 });
