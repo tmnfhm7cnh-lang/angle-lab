@@ -1,0 +1,154 @@
+/* LOTE 4 — design-system.md §2. Imported before app.css. Shared skeleton
+   with dryland-test-logger (which carries its own copy plus the
+   [data-app="dryland"] override block — the two apps deploy to independent
+   repos, so this file is duplicated on purpose, same precedent as
+   src/export/catalogRef.js). */
+:root{
+  color-scheme: dark light;
+
+  /* ---- surfaces, dark (default) ---- */
+  --al-bg:            #0B0E13;
+  --al-surface-1:     #12161D;
+  --al-surface-2:     #1A1F28;
+  --al-surface-3:     #232935;
+  --al-well:          #080B0F;
+  --al-scrim:         rgba(5,7,10,0.55);
+
+  /* ---- lines and edges ---- */
+  --al-line:          #262D38;
+  --al-line-strong:   #39424F;
+  --al-highlight:     rgba(255,255,255,0.055);
+
+  /* ---- ink ---- */
+  --al-ink:           #E9EDF3;
+  --al-ink-muted:     #9AA6B4;
+  --al-ink-faint:     #6B7684;
+  --al-ink-inverse:   #0B0E13;
+
+  /* ---- semantic chroma. Chrome uses these ONLY to echo canvas state. ---- */
+  --al-attention:     #FFB020;
+  --al-danger:        #FF6B6B;
+  --al-focus:         #7DD3FC;
+  --al-ok:            #5EEAD4;
+
+  /* ---- canvas overlay palette (read by canvasRenderer.js; not touched this lote) ---- */
+  --al-mark:          #00E5FF;
+  --al-mark-active:   #FFD23F;
+  --al-mark-ref:      #FFFFFF;
+  --al-halo:          rgba(0,0,0,0.78);
+  --al-plaque:        rgba(11,14,19,0.86);
+  --al-plaque-edge:   rgba(255,255,255,0.22);
+
+  /* ---- type ---- */
+  --al-font-ui:      -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --al-font-num:     ui-monospace, "SF Mono", SFMono-Regular, Menlo, "IBM Plex Mono", "Roboto Mono", monospace;
+  /* No self-hosted display face this lote — design-system.md §3's own
+     fallback, chosen to avoid a network dependency in an offline-first,
+     poolside app. Empty-state wordmark uses --al-font-ui instead. */
+  --al-font-display: var(--al-font-ui);
+
+  --al-text-2xs: 11px;  --al-lh-2xs: 14px;
+  --al-text-xs:  12px;  --al-lh-xs:  16px;
+  --al-text-sm:  13px;  --al-lh-sm:  18px;
+  --al-text-md:  15px;  --al-lh-md:  20px;
+  --al-text-lg:  17px;  --al-lh-lg:  24px;
+  --al-text-xl:  20px;  --al-lh-xl:  26px;
+  --al-text-2xl: 28px;  --al-lh-2xl: 30px;
+  --al-text-3xl: 40px;  --al-lh-3xl: 42px;
+
+  --al-weight-regular: 400;
+  --al-weight-medium:  500;
+  --al-weight-semi:    600;
+  --al-track-caps:     0.08em;
+  --al-track-tight:   -0.015em;
+
+  /* ---- spacing, 4 px base ---- */
+  --al-space-1: 2px;  --al-space-2: 4px;  --al-space-3: 8px;  --al-space-4: 12px;
+  --al-space-5: 16px; --al-space-6: 20px; --al-space-7: 24px; --al-space-8: 32px;
+  --al-space-9: 40px; --al-space-10: 48px;
+  --al-tap: 44px;
+  --al-tap-comfort: 48px;
+
+  /* ---- radii ---- */
+  --al-radius-sm:  6px;
+  --al-radius-md:  9px;
+  --al-radius-lg: 14px;
+  --al-radius-xl: 20px;
+  --al-radius-pill: 999px;
+
+  /* ---- borders ---- */
+  --al-border:        1px solid var(--al-line);
+  --al-border-strong: 1px solid var(--al-line-strong);
+  --al-inner-top:     inset 0 1px 0 var(--al-highlight);
+
+  /* ---- shadows ---- */
+  --al-shadow-1: 0 1px 2px rgba(0,0,0,0.40);
+  --al-shadow-2: 0 4px 12px rgba(0,0,0,0.45);
+  --al-shadow-3: 0 12px 32px rgba(0,0,0,0.55);
+  --al-shadow-inset: inset 0 1px 3px rgba(0,0,0,0.55);
+
+  /* ---- motion ---- */
+  --al-dur-instant: 80ms;
+  --al-dur-fast:   140ms;
+  --al-dur-base:   200ms;
+  --al-dur-slow:   320ms;
+  --al-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --al-ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --al-ease-in:       cubic-bezier(0.5, 0, 0.75, 0);
+}
+
+/* Light theme — "cuaderno de campo", for direct poolside sun. Applied
+   automatically by system preference. There is no in-app toggle yet (that
+   needs a settings sheet neither app has); this lote ships the theme itself,
+   not the switch — see ESTADO.md for that decision. */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --al-bg:          #F4F6F8;
+    --al-surface-1:   #FFFFFF;
+    --al-surface-2:   #FFFFFF;
+    --al-surface-3:   #EDF0F4;
+    --al-well:        #E4E8ED;
+    --al-scrim:       rgba(16,21,27,0.35);
+    --al-line:        #DCE2E9;
+    --al-line-strong: #B7C0CB;
+    --al-highlight:   rgba(255,255,255,0.9);
+    --al-ink:         #10151B;
+    --al-ink-muted:   #5A6472;
+    --al-ink-faint:   #7B8794;
+    --al-ink-inverse: #FFFFFF;
+    --al-attention:   #B45309;
+    --al-danger:      #B91C1C;
+    --al-focus:       #0B5FA5;
+    --al-ok:          #0F766E;
+    --al-shadow-1: 0 1px 2px rgba(16,21,27,0.08);
+    --al-shadow-2: 0 4px 12px rgba(16,21,27,0.10);
+    --al-shadow-3: 0 12px 32px rgba(16,21,27,0.14);
+    --al-shadow-inset: inset 0 1px 3px rgba(16,21,27,0.10);
+  }
+}
+:root[data-theme="light"]{
+  --al-bg:          #F4F6F8;
+  --al-surface-1:   #FFFFFF;
+  --al-surface-2:   #FFFFFF;
+  --al-surface-3:   #EDF0F4;
+  --al-well:        #E4E8ED;
+  --al-scrim:       rgba(16,21,27,0.35);
+  --al-line:        #DCE2E9;
+  --al-line-strong: #B7C0CB;
+  --al-highlight:   rgba(255,255,255,0.9);
+  --al-ink:         #10151B;
+  --al-ink-muted:   #5A6472;
+  --al-ink-faint:   #7B8794;
+  --al-ink-inverse: #FFFFFF;
+  --al-attention:   #B45309;
+  --al-danger:      #B91C1C;
+  --al-focus:       #0B5FA5;
+  --al-ok:          #0F766E;
+  --al-shadow-1: 0 1px 2px rgba(16,21,27,0.08);
+  --al-shadow-2: 0 4px 12px rgba(16,21,27,0.10);
+  --al-shadow-3: 0 12px 32px rgba(16,21,27,0.14);
+  --al-shadow-inset: inset 0 1px 3px rgba(16,21,27,0.10);
+}
+
+/* The canvas overlay tokens do NOT change between themes — the overlay sits
+   on a photograph, not on the theme. */

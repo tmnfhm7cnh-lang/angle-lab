@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#111111" />
+  <meta name="theme-color" content="#0B0E13" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="angle-lab" />
@@ -11,6 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="stylesheet" href="src/styles/tokens.css" />
   <link rel="stylesheet" href="src/styles/app.css" />
 </head>
 <body>
@@ -25,19 +26,14 @@
         <input id="camera-input" type="file" accept="image/*" capture="environment" hidden />
       </label>
       <button id="fit-button" class="bar-button" type="button">Fit to screen</button>
-      <div id="tool-group" role="group" aria-label="Tool">
-        <button class="tool-button" data-tool="select" type="button">Select</button>
-        <button class="tool-button" data-tool="point" type="button">Point</button>
-        <button class="tool-button" data-tool="line" type="button">Line</button>
-        <button class="tool-button" data-tool="angle" type="button">Angle</button>
-        <button class="tool-button" data-tool="distance" type="button">Distance</button>
-        <button class="tool-button" data-tool="repeat" type="button">Repeatability</button>
-      </div>
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
       <button id="protocol-button" class="bar-button" type="button">Protocol</button>
       <button id="export-button" class="bar-button" type="button">Export</button>
       <button id="start-over-button" class="bar-button danger-button" type="button">Start over</button>
-      <span id="zoom-readout" class="zoom-readout">100%</span>
+      <div class="readout">
+        <span class="readout-label" id="readout-label">Zoom</span>
+        <span class="readout-value" id="readout-value">100<span class="readout-unit">%</span></span>
+      </div>
     </header>
     <div id="disclaimer-bar">Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.</div>
     <div id="error-bar" role="alert" hidden></div>
@@ -46,7 +42,57 @@
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>
       <div id="repeat-readout" hidden></div>
+      <div class="empty" id="empty-state">
+        <svg class="empty-mark" viewBox="0 0 180 180" fill="none" stroke-linecap="round">
+          <g stroke="var(--al-ink)" stroke-width="6">
+            <line x1="60" y1="132" x2="60" y2="48" />
+            <line x1="60" y1="132" x2="142" y2="132" />
+          </g>
+          <path d="M 60 96 A 36 36 0 0 1 96 132" stroke="var(--al-mark-active)" stroke-width="4" />
+          <circle cx="60" cy="132" r="6" fill="var(--al-mark)" stroke="none" />
+        </svg>
+        <h1 class="empty-title">Angle Lab</h1>
+        <p class="empty-body">Open a photo to place points and read angles and distances.</p>
+        <div class="empty-actions">
+          <label class="bar-button">
+            Open photo
+            <input id="empty-file-input" type="file" accept="image/*" hidden />
+          </label>
+          <label class="bar-button ghost-button">
+            Take photo
+            <input id="empty-camera-input" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+        </div>
+      </div>
     </main>
+    <footer id="tool-bar">
+      <div id="tool-group" role="group" aria-label="Tool">
+        <button class="tool-button" data-tool="select" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><path d="M4 3l11 6.5-4.6 1.2L13 16l-2 1-2.6-5.6L4 15z" /></svg>
+          <span class="tool-label">Select</span>
+        </button>
+        <button class="tool-button" data-tool="point" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" /><circle cx="10" cy="10" r="1.6" fill="currentColor" stroke="none" /></svg>
+          <span class="tool-label">Point</span>
+        </button>
+        <button class="tool-button" data-tool="line" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><line x1="3.5" y1="16.5" x2="16.5" y2="3.5" /><circle cx="3.5" cy="16.5" r="1.6" fill="currentColor" stroke="none" /><circle cx="16.5" cy="3.5" r="1.6" fill="currentColor" stroke="none" /></svg>
+          <span class="tool-label">Line</span>
+        </button>
+        <button class="tool-button" data-tool="angle" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><path d="M4 16 L4 6 M4 16 L16 16" /><path d="M4 11 A5 5 0 0 1 9 16" /></svg>
+          <span class="tool-label">Angle</span>
+        </button>
+        <button class="tool-button" data-tool="distance" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><line x1="4" y1="10" x2="16" y2="10" /><line x1="4" y1="6" x2="4" y2="14" /><line x1="16" y1="6" x2="16" y2="14" /></svg>
+          <span class="tool-label">Distance</span>
+        </button>
+        <button class="tool-button" data-tool="repeat" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><path d="M15 6a6 6 0 1 0 1.5 4" /><path d="M15 2v4h-4" /></svg>
+          <span class="tool-label">Repeat</span>
+        </button>
+      </div>
+    </footer>
   </div>
   <dialog id="protocol-dialog">
     <h2>Capture protocol</h2>

@@ -46,7 +46,11 @@ const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
 const cameraInput = document.getElementById('camera-input');
 const fitButton = document.getElementById('fit-button');
-const zoomReadout = document.getElementById('zoom-readout');
+const readoutLabel = document.getElementById('readout-label');
+const readoutValue = document.getElementById('readout-value');
+const emptyState = document.getElementById('empty-state');
+const emptyFileInput = document.getElementById('empty-file-input');
+const emptyCameraInput = document.getElementById('empty-camera-input');
 const toolButtons = Array.from(document.querySelectorAll('.tool-button[data-tool]'));
 const deleteButton = document.getElementById('delete-selected-button');
 const magnifierCanvas = document.getElementById('magnifier');
@@ -266,6 +270,37 @@ function activeDistances() {
     .filter(Boolean);
 }
 
+// LOTE 4 §4 (design-system.md "NUMERIC READOUT"): the selected angle or
+// distance is the primary reading; zoom is the fallback when nothing is
+// selected. Never a live number outside this panel and the canvas label —
+// this just reads what evaluateAngle/evaluateDistance already compute for
+// the export dialog, it does not derive anything new.
+function updateReadout() {
+  const readings = image && project.activeImageId ? readingsForImage(project, project.activeImageId) : [];
+  const selected = readings.find((r) => r.id === selectedEntityId);
+  if (!selected) {
+    readoutLabel.textContent = 'Zoom';
+    readoutValue.classList.remove('readout-value--empty');
+    readoutValue.innerHTML = `${Math.round(viewport.scale * 100)}<span class="readout-unit">%</span>`;
+    return;
+  }
+  if (selected.type === 'angle') {
+    const decimals = decimalsForSigma(selected.sigmaDegrees);
+    readoutLabel.textContent = 'Angle';
+    readoutValue.classList.remove('readout-value--empty');
+    readoutValue.textContent = formatAngle(selected.degrees, decimals);
+  } else {
+    readoutLabel.textContent = 'Distance';
+    readoutValue.classList.remove('readout-value--empty');
+    if (Number.isFinite(selected.real)) {
+      const decimals = decimalsForSigma(selected.sigma);
+      readoutValue.innerHTML = `${formatLength(selected.real, selected.unit, decimals)}`;
+    } else {
+      readoutValue.innerHTML = `${selected.pixels.toFixed(1)}<span class="readout-unit">px</span>`;
+    }
+  }
+}
+
 function scheduleRender() {
   if (renderScheduled) return;
   renderScheduled = true;
@@ -280,8 +315,9 @@ function scheduleRender() {
       angles: activeAngles(),
       distances: activeDistances(),
     });
-    zoomReadout.textContent = `${Math.round(viewport.scale * 100)}%`;
+    updateReadout();
     deleteButton.disabled = !selectedEntityId;
+    emptyState.hidden = !!image;
   });
 }
 
@@ -331,6 +367,16 @@ fileInput.addEventListener('change', (event) => {
   event.target.value = '';
 });
 
+emptyFileInput.addEventListener('change', (event) => {
+  loadFile(event.target.files[0]);
+  event.target.value = '';
+});
+
+emptyCameraInput.addEventListener('change', (event) => {
+  loadFile(event.target.files[0]);
+  event.target.value = '';
+});
+
 cameraInput.addEventListener('change', (event) => {
   loadFile(event.target.files[0]);
   event.target.value = '';
@@ -348,7 +394,9 @@ function setMode(nextMode) {
   repeatTaps = [];
   repeatReadout.hidden = true;
   for (const button of toolButtons) {
-    button.classList.toggle('active', button.dataset.tool === mode);
+    const isActive = button.dataset.tool === mode;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   }
   scheduleRender();
 }
