@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when any file below changes. */
-const CACHE = 'angle-lab-v1';
+const CACHE = 'angle-lab-v2';
 
 /* Without these the app does not run: if one is missing the install must fail loudly. */
 const CORE = [
@@ -18,6 +18,8 @@ const CORE = [
   'src/render/canvasRenderer.js',
   'src/render/imageLoader.js',
   'src/storage/db.js',
+  'src/export/catalogRef.js',
+  'src/export/csvExport.js',
   'src/styles/app.css',
 ];
 /* Cosmetic. A missing icon must never cost the offline cache — same bug

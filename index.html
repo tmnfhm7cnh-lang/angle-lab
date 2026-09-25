@@ -35,6 +35,7 @@
       </div>
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
       <button id="protocol-button" class="bar-button" type="button">Protocol</button>
+      <button id="export-button" class="bar-button" type="button">Export</button>
       <button id="start-over-button" class="bar-button danger-button" type="button">Start over</button>
       <span id="zoom-readout" class="zoom-readout">100%</span>
     </header>
@@ -64,6 +65,35 @@
       <li>angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
     </ul>
     <button id="protocol-close-button" class="bar-button" type="button">Close</button>
+  </dialog>
+  <dialog id="export-dialog">
+    <h2>Export</h2>
+    <p class="export-hint">
+      Fills rows for <code>mediciones-2026-27.csv</code> — the schema, not the file itself: this is
+      a static site with no access to your OneDrive, so the CSV lands via Share/Save the same way
+      seco's own export already does, and you paste or append it by hand. Only <strong>tagged</strong>
+      readings below are exported; anything left "— untagged —" is skipped, not sent as a blank row.
+    </p>
+    <div class="export-fields">
+      <label>Subject code <input id="export-subject-code" type="text" placeholder="ATL-07" /></label>
+      <label>Category
+        <select id="export-category">
+          <option value="">—</option>
+          <option value="alevin">Alevín</option>
+          <option value="infantil">Infantil</option>
+          <option value="junior">Junior</option>
+        </select>
+      </label>
+      <label>Date <input id="export-date" type="date" /></label>
+      <label>Evaluator <input id="export-evaluator" type="text" value="DJ" /></label>
+    </div>
+    <div id="export-readings"></div>
+    <p id="export-untagged-note" class="export-hint"></p>
+    <div class="export-actions">
+      <button id="export-png-button" class="bar-button" type="button">Share photo (PNG)</button>
+      <button id="export-csv-button" class="bar-button" type="button">Share CSV rows</button>
+      <button id="export-close-button" class="bar-button" type="button">Close</button>
+    </div>
   </dialog>
   <script type="module" src="src/ui/app.js"></script>
 </body>

@@ -21,6 +21,8 @@ import {
   getPoint,
   serialize,
   deserialize,
+  setSubjectCode,
+  setMeasurementTag,
 } from '../src/core/model.js';
 
 function projectWithImage() {
@@ -298,6 +300,57 @@ describe('addSegment / addAngle / addDistance', () => {
       assert.equal('pixels' in entity, false);
       assert.equal('value' in entity, false);
     }
+  });
+});
+
+describe('setSubjectCode', () => {
+  test('replaces subjectCode', () => {
+    const { project } = projectWithImage();
+    assert.equal(setSubjectCode(project, 'ATL-09'), true);
+    assert.equal(project.subjectCode, 'ATL-09');
+  });
+
+  test('rejects a non-string', () => {
+    const { project } = projectWithImage();
+    assert.equal(setSubjectCode(project, 7), false);
+    assert.equal(project.subjectCode, 'ATL-01');
+  });
+});
+
+describe('setMeasurementTag', () => {
+  function projectWithAngle() {
+    const { project, image } = projectWithImage();
+    const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const b = addPoint(project, { imageId: image.id, x: 3, y: 4 });
+    const c = addPoint(project, { imageId: image.id, x: 3, y: 0 });
+    const angle = addAngle(project, a.id, c.id, b.id);
+    return { project, angle };
+  }
+
+  test('tags a measurement with a test/metric pair', () => {
+    const { project, angle } = projectWithAngle();
+    assert.equal(setMeasurementTag(project, angle.id, { test: 'puente', metric: 'desviacion_brazo' }), true);
+    const stored = project.measurements.find((m) => m.id === angle.id);
+    assert.deepEqual(stored.tag, { test: 'puente', metric: 'desviacion_brazo' });
+  });
+
+  test('null clears an existing tag', () => {
+    const { project, angle } = projectWithAngle();
+    setMeasurementTag(project, angle.id, { test: 'puente', metric: 'desviacion_brazo' });
+    assert.equal(setMeasurementTag(project, angle.id, null), true);
+    const stored = project.measurements.find((m) => m.id === angle.id);
+    assert.equal('tag' in stored, false);
+  });
+
+  test('rejects an unknown measurement id', () => {
+    const { project } = projectWithAngle();
+    assert.equal(setMeasurementTag(project, 'not-an-id', { test: 'puente', metric: 'x' }), false);
+  });
+
+  test('rejects a malformed tag', () => {
+    const { project, angle } = projectWithAngle();
+    assert.equal(setMeasurementTag(project, angle.id, { test: 'puente' }), false);
+    assert.equal(setMeasurementTag(project, angle.id, {}), false);
   });
 });
 

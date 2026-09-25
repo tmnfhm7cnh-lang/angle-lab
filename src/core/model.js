@@ -68,6 +68,16 @@ export function setDisplayUnit(project, unit) {
   return true;
 }
 
+// LOTE 3 §6: subjectCode was only ever settable at createProject() time —
+// there was no way to attach it to a photo already loaded, which is the
+// normal order of work (load the photo, then know/type who it is).
+export function setSubjectCode(project, subjectCode) {
+  if (typeof subjectCode !== 'string') return false;
+  project.subjectCode = subjectCode;
+  touch(project);
+  return true;
+}
+
 export function addImage(project, { blobKey, width, height, exifOrientation = 0, capturedAt = null } = {}) {
   const image = { id: generateId(), blobKey, width, height, exifOrientation, capturedAt };
   project.images.push(image);
@@ -166,6 +176,26 @@ export function addDistance(project, aId, bId) {
   project.measurements.push(measurement);
   touch(project);
   return measurement;
+}
+
+// LOTE 3 §6: which dryland-test-logger catalogue entry (prueba/métrica) this
+// angle or distance fulfils — the piece of information the CSV export needs
+// that nothing in the geometry itself can supply. An optional field, added
+// without a schema bump (same precedent as displayUnit/calibrations before
+// it and placementScale on points): a measurement with no tag is simply
+// unassigned, not on an old version of anything.
+export function setMeasurementTag(project, measurementId, tag) {
+  const measurement = project.measurements.find((m) => m.id === measurementId);
+  if (!measurement) return false;
+  if (tag === null) {
+    delete measurement.tag;
+    touch(project);
+    return true;
+  }
+  if (!tag || typeof tag.test !== 'string' || typeof tag.metric !== 'string') return false;
+  measurement.tag = { test: tag.test, metric: tag.metric };
+  touch(project);
+  return true;
 }
 
 // LOTE 2 audit: setCalibration accepted two coincident points and a

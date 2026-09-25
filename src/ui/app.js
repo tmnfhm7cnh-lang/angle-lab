@@ -16,12 +16,14 @@ import {
   getPoint,
   serialize,
   deserialize,
+  setSubjectCode,
+  setMeasurementTag,
 } from '../core/model.js';
 import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
-import { repeatabilityStats } from '../core/uncertainty.js';
+import { repeatabilityStats, decimalsForSigma } from '../core/uncertainty.js';
 import { millimetresPerPixel, pixelsToReal, isCalibrated } from '../core/calibration.js';
-import { formatLength } from '../core/units.js';
+import { formatLength, formatAngle } from '../core/units.js';
 import {
   saveActiveProject,
   loadActiveProject,
@@ -32,6 +34,8 @@ import {
   estimateStorageRatio,
   STORAGE_WARNING_RATIO,
 } from '../storage/db.js';
+import { readingsForImage, buildExportCsv } from '../export/csvExport.js';
+import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
 const MAGNIFIER_SIZE_CSS_PX = 120;
@@ -54,6 +58,17 @@ const protocolCloseButton = document.getElementById('protocol-close-button');
 const startOverButton = document.getElementById('start-over-button');
 const errorBar = document.getElementById('error-bar');
 const storageBar = document.getElementById('storage-bar');
+const exportButton = document.getElementById('export-button');
+const exportDialog = document.getElementById('export-dialog');
+const exportCloseButton = document.getElementById('export-close-button');
+const exportSubjectCodeInput = document.getElementById('export-subject-code');
+const exportCategorySelect = document.getElementById('export-category');
+const exportDateInput = document.getElementById('export-date');
+const exportEvaluatorInput = document.getElementById('export-evaluator');
+const exportReadingsContainer = document.getElementById('export-readings');
+const exportUntaggedNote = document.getElementById('export-untagged-note');
+const exportPngButton = document.getElementById('export-png-button');
+const exportCsvButton = document.getElementById('export-csv-button');
 
 // LOTE 2 §2.3(a): a static checklist plus what the app does and doesn't
 // guarantee — no ground truth here, just the physics of a single photo.
@@ -672,6 +687,185 @@ startOverButton.addEventListener('click', async () => {
   clearError();
   storageBar.hidden = true;
   scheduleRender();
+});
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Same shape as dryland-test-logger/app.js's own shareFile: native share
+// sheet first (so "Save to Files" can drop it straight into the
+// OneDrive-synced folder, the same route seco's CSV already takes), a
+// download-link fallback otherwise. Duplicated rather than shared — the two
+// apps' bundles are independent by design (LOTE 3 §1).
+async function shareFile(name, content, mime) {
+  const file = new File([content], name, { type: mime });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return true;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return false;
+    }
+  }
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return true;
+}
+
+// LOTE 3 §6: one row per angle/distance on the active image, with a Test
+// and Metric <select> pair (catalogRef.js's curated list, filtered to that
+// reading's own kind — an angle can only be tagged with a 'grados' metric,
+// a distance only with a 'cm' one) so untagged readings stay obviously
+// untagged rather than silently exportable as blank rows.
+function updateUntaggedNote() {
+  if (!image || !project.activeImageId) return;
+  const readings = readingsForImage(project, project.activeImageId);
+  const taggedCount = readings.filter((r) => r.tag).length;
+  exportUntaggedNote.textContent = readings.length
+    ? `${taggedCount} of ${readings.length} tagged — only tagged readings export.`
+    : 'No angle/distance measurements on this photo yet.';
+}
+
+function renderExportReadings() {
+  exportReadingsContainer.innerHTML = '';
+  if (!image || !project.activeImageId) {
+    exportUntaggedNote.textContent = 'No photo loaded.';
+    return;
+  }
+  const readings = readingsForImage(project, project.activeImageId);
+
+  for (const r of readings) {
+    const row = document.createElement('div');
+    row.className = 'export-reading-row';
+
+    const label = document.createElement('span');
+    label.className = 'export-reading-label';
+    if (r.type === 'angle') {
+      const decimals = decimalsForSigma(r.sigmaDegrees);
+      label.textContent = `Angle · ${formatAngle(r.degrees, decimals)} (${r.quality.level})`;
+    } else {
+      const decimals = decimalsForSigma(r.sigma);
+      const realText = Number.isFinite(r.real)
+        ? formatLength(r.real, r.unit, decimals)
+        : `${r.pixels.toFixed(1)} px (uncalibrated)`;
+      label.textContent = `Distance · ${realText} (${r.quality.level})`;
+    }
+
+    const testSelect = document.createElement('select');
+    testSelect.appendChild(new Option('— untagged —', ''));
+    for (const { test, testLabel } of testLabelsForKind(r.type)) {
+      testSelect.appendChild(new Option(testLabel, test));
+    }
+    testSelect.value = r.tag?.test || '';
+
+    const metricSelect = document.createElement('select');
+    function rebuildMetricOptions(selectedTest) {
+      metricSelect.innerHTML = '';
+      metricSelect.appendChild(new Option('—', ''));
+      for (const m of metricsForKind(r.type).filter((entry) => entry.test === selectedTest)) {
+        metricSelect.appendChild(new Option(m.metricLabel, m.metric));
+      }
+    }
+    rebuildMetricOptions(testSelect.value);
+    metricSelect.value = r.tag?.metric || '';
+    metricSelect.disabled = !testSelect.value;
+
+    function applyTag() {
+      if (testSelect.value && metricSelect.value) {
+        setMeasurementTag(project, r.id, { test: testSelect.value, metric: metricSelect.value });
+      } else {
+        setMeasurementTag(project, r.id, null);
+      }
+      scheduleSave();
+      updateUntaggedNote();
+    }
+
+    testSelect.addEventListener('change', () => {
+      rebuildMetricOptions(testSelect.value);
+      metricSelect.value = '';
+      metricSelect.disabled = !testSelect.value;
+      applyTag();
+    });
+    metricSelect.addEventListener('change', applyTag);
+
+    row.append(label, testSelect, metricSelect);
+    exportReadingsContainer.appendChild(row);
+  }
+
+  updateUntaggedNote();
+}
+
+exportButton.addEventListener('click', () => {
+  exportSubjectCodeInput.value = project.subjectCode || '';
+  if (!exportDateInput.value) exportDateInput.value = todayISO();
+  renderExportReadings();
+  exportDialog.showModal();
+});
+
+exportCloseButton.addEventListener('click', () => exportDialog.close());
+
+exportSubjectCodeInput.addEventListener('change', () => {
+  setSubjectCode(project, exportSubjectCodeInput.value.trim());
+  scheduleSave();
+});
+
+exportCsvButton.addEventListener('click', async () => {
+  if (!image || !project.activeImageId) return;
+  const readings = readingsForImage(project, project.activeImageId);
+  const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
+  const date = exportDateInput.value || todayISO();
+  const csv = buildExportCsv(readings, {
+    date,
+    subjectCode,
+    category: exportCategorySelect.value,
+    evaluator: exportEvaluatorInput.value.trim() || 'DJ',
+  });
+  await shareFile(`${subjectCode}_${date}_angle-lab.csv`, csv, 'text/csv');
+});
+
+exportPngButton.addEventListener('click', async () => {
+  if (!image) return;
+  const targetLongestSide = Math.min(MAX_ZOOM_DISPLAY_SIDE, Math.max(image.imageSize.width, image.imageSize.height));
+  let bitmap = image.displayBitmap;
+  let decodedFresh = false;
+  if (image.originalBlob) {
+    try {
+      bitmap = await decodeDisplayBitmap(image.originalBlob, image.imageSize, targetLongestSide);
+      decodedFresh = true;
+    } catch (err) {
+      showError(err.message);
+      return;
+    }
+  }
+  const exportScale = bitmap.width / image.imageSize.width;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = Math.max(1, Math.round(image.imageSize.width * exportScale));
+  offscreen.height = Math.max(1, Math.round(image.imageSize.height * exportScale));
+  const offCtx = offscreen.getContext('2d');
+  const exportViewport = { scale: exportScale, tx: 0, ty: 0, rotation: 0 };
+  renderFrame(offCtx, 1, { width: offscreen.width, height: offscreen.height }, exportViewport, { ...image, displayBitmap: bitmap }, {
+    points: activePoints(),
+    // No selection ring / pending markers in the exported photo — those are
+    // editing-session state, not part of the analysis being shared.
+    selectedId: null,
+    selectedType: null,
+    pendingPointIds: [],
+    segments: activeSegments(),
+    angles: activeAngles(),
+    distances: activeDistances(),
+  });
+  if (decodedFresh) bitmap.close();
+  const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));
+  const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
+  const date = exportDateInput.value || todayISO();
+  await shareFile(`${subjectCode}_${date}_angle-lab.png`, blob, 'image/png');
 });
 
 new ResizeObserver(resizeCanvas).observe(canvas);
