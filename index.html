@@ -28,6 +28,7 @@
       <button id="fit-button" class="bar-button" type="button">Fit to screen</button>
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
       <button id="protocol-button" class="bar-button" type="button">Protocol</button>
+      <button id="guide-button" class="bar-button" type="button">Guide</button>
       <button id="export-button" class="bar-button" type="button">Export</button>
       <button id="start-over-button" class="bar-button danger-button" type="button">Start over</button>
       <div class="readout">
@@ -42,6 +43,7 @@
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>
       <div id="repeat-readout" hidden></div>
+      <div id="guide-readout" hidden></div>
       <div class="empty" id="empty-state">
         <svg class="empty-mark" viewBox="0 0 180 180" fill="none" stroke-linecap="round">
           <g stroke="var(--al-ink)" stroke-width="6">
@@ -111,6 +113,16 @@
       <li>angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
     </ul>
     <button id="protocol-close-button" class="bar-button" type="button">Close</button>
+  </dialog>
+  <dialog id="guide-dialog">
+    <h2>Measurement guide</h2>
+    <p class="export-hint">
+      Tap the named landmarks in order on the photo; the angle or distance each one feeds is
+      built and tagged for export automatically once every landmark it needs has a point. The
+      points themselves stay ordinary points afterwards — draggable in Select, like any other.
+    </p>
+    <div id="guide-list"></div>
+    <button id="guide-close-button" class="bar-button" type="button">Close</button>
   </dialog>
   <dialog id="export-dialog">
     <h2>Export</h2>

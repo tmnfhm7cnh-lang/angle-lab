@@ -22,6 +22,8 @@ import {
 import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
 import { repeatabilityStats, decimalsForSigma } from '../core/uncertainty.js';
+import { nextLandmark, isGuideComplete, applyGuide } from '../core/guides.js';
+import { GUIDES } from '../export/guides.js';
 import { millimetresPerPixel, pixelsToReal, isCalibrated } from '../core/calibration.js';
 import { formatLength, formatAngle } from '../core/units.js';
 import {
@@ -56,6 +58,11 @@ const deleteButton = document.getElementById('delete-selected-button');
 const magnifierCanvas = document.getElementById('magnifier');
 const magnifierCtx = magnifierCanvas.getContext('2d');
 const repeatReadout = document.getElementById('repeat-readout');
+const guideReadout = document.getElementById('guide-readout');
+const guideButton = document.getElementById('guide-button');
+const guideDialog = document.getElementById('guide-dialog');
+const guideCloseButton = document.getElementById('guide-close-button');
+const guideListContainer = document.getElementById('guide-list');
 const protocolButton = document.getElementById('protocol-button');
 const protocolDialog = document.getElementById('protocol-dialog');
 const protocolCloseButton = document.getElementById('protocol-close-button');
@@ -115,6 +122,17 @@ let justCreatedMeasurementId = null;
 // re-found, so there is nothing here for undo-on-cancel to protect.
 let repeatTaps = [];
 const REPEATABILITY_TAP_COUNT = 3;
+
+// LOTE 5 §2: a measurement guide walks named landmarks in order — see
+// core/guides.js's module doc. activeGuide is the guide picked from
+// #guide-dialog; placedLandmarks is the ordered { landmarkId, pointId } list
+// tapped so far, in the same "in-progress claim" spirit as pendingPointIds.
+// justCreatedGuideMeasurementIds mirrors justCreatedMeasurementId, but as a
+// list: the landmark that completes a guide can build more than one
+// measurement in a single tap (see onPointDragEnd for the undo).
+let activeGuide = null;
+let placedLandmarks = [];
+let justCreatedGuideMeasurementIds = [];
 
 // LOTE 3 §3/§7: persistence, storage health and load-error reporting.
 function showError(message) {
@@ -384,15 +402,24 @@ cameraInput.addEventListener('change', (event) => {
 
 fitButton.addEventListener('click', fitToScreen);
 
-function setMode(nextMode) {
+// `guide` is only ever passed when entering 'guide' mode from the guide list
+// (below); every other caller — the tool buttons, and this function's own
+// exit-guide-mode path — omits it, which is exactly "no guide in progress".
+function setMode(nextMode, guide = null) {
   mode = nextMode;
   // Switching tools abandons any in-progress LINE/ANGLE/DISTANCE pick —
   // there is no well-defined meaning for a pending point picked under one
   // tool once a different tool is active. Same for an in-progress
-  // repeatability run.
+  // repeatability run, and an in-progress guide (its already-placed
+  // landmarks stay on the photo as ordinary points; only the "waiting for
+  // the next tap" state is abandoned).
   pendingPointIds = [];
   repeatTaps = [];
   repeatReadout.hidden = true;
+  activeGuide = nextMode === 'guide' ? guide : null;
+  placedLandmarks = [];
+  justCreatedGuideMeasurementIds = [];
+  updateGuideReadout();
   for (const button of toolButtons) {
     const isActive = button.dataset.tool === mode;
     button.classList.toggle('active', isActive);
@@ -405,6 +432,47 @@ for (const button of toolButtons) {
   button.addEventListener('click', () => setMode(button.dataset.tool));
 }
 setMode(mode);
+
+// LOTE 5 §2: shows which landmark a guide is waiting for next, or that it is
+// done — the guided-placement equivalent of #repeat-readout's tap counter.
+function updateGuideReadout() {
+  if (mode !== 'guide' || !activeGuide) {
+    guideReadout.hidden = true;
+    return;
+  }
+  const placedIds = placedLandmarks.map((p) => p.landmarkId);
+  const landmark = nextLandmark(activeGuide, placedIds);
+  guideReadout.hidden = false;
+  guideReadout.textContent = landmark
+    ? `${activeGuide.label}: tap ${landmark.label} (${placedLandmarks.length + 1}/${activeGuide.landmarks.length}).`
+    : `${activeGuide.label}: done. Switch to Select to inspect or adjust.`;
+}
+
+function renderGuideList() {
+  guideListContainer.innerHTML = '';
+  if (!GUIDES.length) {
+    guideListContainer.textContent = 'No guides yet.';
+    return;
+  }
+  for (const guide of GUIDES) {
+    const button = document.createElement('button');
+    button.className = 'bar-button';
+    button.type = 'button';
+    button.textContent = `${guide.label} — ${guide.landmarks.length} points`;
+    button.disabled = !image || !project.activeImageId;
+    button.addEventListener('click', () => {
+      guideDialog.close();
+      setMode('guide', guide);
+    });
+    guideListContainer.appendChild(button);
+  }
+}
+
+guideButton.addEventListener('click', () => {
+  renderGuideList();
+  guideDialog.showModal();
+});
+guideCloseButton.addEventListener('click', () => guideDialog.close());
 
 function deleteSelected() {
   if (!selectedEntityId) return;
@@ -573,6 +641,39 @@ function onPointClaim(viewPoint, event) {
     return true;
   }
 
+  if (mode === 'guide') {
+    if (!activeGuide) return false;
+    const placedIds = placedLandmarks.map((p) => p.landmarkId);
+    const landmark = nextLandmark(activeGuide, placedIds);
+    // Guide already complete: a further tap in this mode places nothing —
+    // same "nowhere left for this claim to go" outcome as an empty-space tap
+    // in LINE/ANGLE/DISTANCE. The user switches tools (or reopens the guide
+    // list) deliberately instead.
+    if (!landmark) return false;
+    const created = addPoint(project, {
+      imageId: project.activeImageId,
+      x: imagePoint.x,
+      y: imagePoint.y,
+      placementScale: viewport.scale,
+      label: landmark.label,
+      landmark: landmark.id,
+    });
+    placedLandmarks.push({ landmarkId: landmark.id, pointId: created.id });
+    selectedEntityId = created.id;
+    selectedEntityType = 'point';
+    justCreatedPointId = created.id;
+    justCreatedGuideMeasurementIds = [];
+    if (isGuideComplete(activeGuide, placedLandmarks.map((p) => p.landmarkId))) {
+      const pointIdByLandmark = Object.fromEntries(placedLandmarks.map((p) => [p.landmarkId, p.pointId]));
+      const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark);
+      justCreatedGuideMeasurementIds = builtMeasurements.map((m) => m.id);
+    }
+    updateGuideReadout();
+    scheduleRender();
+    scheduleSave();
+    return true;
+  }
+
   const toleranceImage = viewToImageLength(TOUCH_RADIUS_CSS_PX, viewport);
   const hit = hitTest(project, imagePoint, toleranceImage, project.activeImageId);
 
@@ -656,6 +757,18 @@ function onPointDragEnd(point, event) {
         selectedEntityType = null;
       }
       scheduleRender();
+      undidSomething = true;
+    }
+    // A guide's own claim (above) may have both placed a landmark point and,
+    // if that landmark completed the guide, built one or more tagged
+    // measurements from it in the same tap — undo has to unwind both, in
+    // reverse: the measurements first (they reference the point), then the
+    // landmark placement itself (the point removal already happened above).
+    if (mode === 'guide' && placedLandmarks.length && placedLandmarks[placedLandmarks.length - 1].pointId === justCreatedPointId) {
+      for (const id of justCreatedGuideMeasurementIds) removeEntity(project, id);
+      justCreatedGuideMeasurementIds = [];
+      placedLandmarks.pop();
+      updateGuideReadout();
       undidSomething = true;
     }
     if (justCreatedMeasurementId) {

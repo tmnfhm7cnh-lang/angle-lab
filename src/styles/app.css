@@ -273,6 +273,29 @@ html, body {
   display: none;
 }
 
+/* Same plaque as #repeat-readout — the two never show at once (a mode is
+   either 'repeat' or 'guide', never both), so they can share the recipe
+   without sharing an id. */
+#guide-readout {
+  position: absolute;
+  left: 50%;
+  bottom: calc(64px + env(safe-area-inset-bottom) + var(--al-space-4));
+  transform: translateX(-50%);
+  max-width: min(90%, 420px);
+  background: var(--al-plaque);
+  border: var(--al-border);
+  border-radius: var(--al-radius-lg);
+  padding: var(--al-space-4) var(--al-space-5);
+  font-size: var(--al-text-sm);
+  line-height: 1.5;
+  text-align: center;
+  z-index: 15;
+}
+
+#guide-readout[hidden] {
+  display: none;
+}
+
 /* LOTE 3: image-decode failures (§7) and storage-quota warnings (§3) both
    use this pair — error is a hard red, storage a softer amber, both
    dismissible unlike #disclaimer-bar, which is permanent by design. */
@@ -390,6 +413,42 @@ html, body {
 
 #protocol-dialog button {
   margin-top: var(--al-space-4);
+}
+
+#guide-dialog {
+  max-width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--al-surface-2);
+  color: var(--al-ink);
+  border: var(--al-border);
+  border-radius: var(--al-radius-lg);
+  padding: var(--al-space-6) var(--al-space-7);
+  box-shadow: var(--al-shadow-3);
+}
+
+#guide-dialog::backdrop {
+  background: var(--al-scrim);
+}
+
+#guide-dialog h2 {
+  font-size: var(--al-text-lg);
+  margin: 0 0 var(--al-space-3);
+}
+
+#guide-dialog button {
+  margin-top: var(--al-space-3);
+}
+
+#guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--al-space-3);
+}
+
+#guide-list button {
+  width: 100%;
+  text-align: left;
 }
 
 #export-dialog {
