@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when any file below changes. */
-const CACHE = 'angle-lab-v4';
+const CACHE = 'angle-lab-v7';
 
 /* Without these the app does not run: if one is missing the install must fail loudly. */
 const CORE = [
@@ -22,6 +22,7 @@ const CORE = [
   'src/export/catalogRef.js',
   'src/export/csvExport.js',
   'src/export/guides.js',
+  'src/export/batteryTags.js',
   'src/styles/tokens.css',
   'src/styles/app.css',
 ];

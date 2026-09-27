@@ -6,7 +6,8 @@ import { evaluateAngle } from '../src/core/measurements.js';
 
 // A synthetic three-landmark guide for testing the engine itself — not a real body part, so a
 // wrong angle here can never be mistaken for wrong biomechanics content (see src/export/guides.js
-// for the real ones).
+// for the real ones). `key` is a body-generic label, never a battery's test/metric — see
+// src/export/batteryTags.js for how (and whether) a key becomes an exported tag.
 const TEST_GUIDE = {
   id: 'test-guide',
   label: 'Test guide',
@@ -15,8 +16,12 @@ const TEST_GUIDE = {
     { id: 'b', label: 'B' },
     { id: 'c', label: 'C' },
   ],
-  plans: [{ kind: 'angle', a: 'a', vertex: 'b', c: 'c', tag: { test: 'x', metric: 'y' } }],
+  plans: [{ kind: 'angle', a: 'a', vertex: 'b', c: 'c', key: 'y' }],
 };
+
+// A stand-in for a battery's own mapping (e.g. resolveAquamadTag) — never imported by
+// core/guides.js itself, only passed in by a caller that wants tagging.
+const resolveTestTag = (guideId, planKey) => (guideId === 'test-guide' && planKey === 'y' ? { test: 'x', metric: 'y' } : null);
 
 function projectWithImage() {
   const project = createProject();
@@ -44,7 +49,7 @@ describe('nextLandmark / isGuideComplete', () => {
 });
 
 describe('applyGuide', () => {
-  test('builds and tags the angle once all three landmarks have a point', () => {
+  test('builds the angle once all three landmarks have a point, untagged with no resolver', () => {
     const { project, image } = projectWithImage();
     const pA = addPoint(project, { imageId: image.id, x: 0, y: 0 });
     const pB = addPoint(project, { imageId: image.id, x: 0, y: 10 });
@@ -53,9 +58,28 @@ describe('applyGuide', () => {
     assert.equal(created.length, 1);
     assert.equal(skipped.length, 0);
     assert.equal(created[0].type, 'angle');
-    assert.deepEqual(created[0].tag, { test: 'x', metric: 'y' });
+    // No resolveTag passed in — same as a freeform angle drawn without any guide at all.
+    assert.equal(created[0].tag, undefined);
     // 90 degrees: a below b, c to the right of b.
     assert.equal(Math.round(evaluateAngle(project, created[0].id).degrees), 90);
+  });
+
+  test('tags the angle when a resolveTag is passed in, from its key, not a battery hard-coded here', () => {
+    const { project, image } = projectWithImage();
+    const pA = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const pB = addPoint(project, { imageId: image.id, x: 0, y: 10 });
+    const pC = addPoint(project, { imageId: image.id, x: 10, y: 10 });
+    const { created } = applyGuide(project, TEST_GUIDE, { a: pA.id, b: pB.id, c: pC.id }, resolveTestTag);
+    assert.deepEqual(created[0].tag, { test: 'x', metric: 'y' });
+  });
+
+  test('a resolver that recognises no key leaves the measurement untagged, not thrown', () => {
+    const { project, image } = projectWithImage();
+    const pA = addPoint(project, { imageId: image.id, x: 0, y: 0 });
+    const pB = addPoint(project, { imageId: image.id, x: 0, y: 10 });
+    const pC = addPoint(project, { imageId: image.id, x: 10, y: 10 });
+    const { created } = applyGuide(project, TEST_GUIDE, { a: pA.id, b: pB.id, c: pC.id }, () => null);
+    assert.equal(created[0].tag, undefined);
   });
 
   test('a plan whose landmark was never placed is skipped, not thrown', () => {

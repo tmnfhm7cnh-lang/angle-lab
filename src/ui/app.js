@@ -38,6 +38,7 @@ import {
 } from '../storage/db.js';
 import { readingsForImage, buildExportCsv } from '../export/csvExport.js';
 import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
+import { resolveAquamadTag } from '../export/batteryTags.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
 const MAGNIFIER_SIZE_CSS_PX = 120;
@@ -665,7 +666,10 @@ function onPointClaim(viewPoint, event) {
     justCreatedGuideMeasurementIds = [];
     if (isGuideComplete(activeGuide, placedLandmarks.map((p) => p.landmarkId))) {
       const pointIdByLandmark = Object.fromEntries(placedLandmarks.map((p) => [p.landmarkId, p.pointId]));
-      const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark);
+      // resolveAquamadTag is Daniel's own battery mapping, not a hard-wired part of the guide
+      // engine — see src/export/batteryTags.js. A commercial build with a different battery, or
+      // none, passes a different resolver (or none) here; nothing else in this file changes.
+      const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark, resolveAquamadTag);
       justCreatedGuideMeasurementIds = builtMeasurements.map((m) => m.id);
     }
     updateGuideReadout();
