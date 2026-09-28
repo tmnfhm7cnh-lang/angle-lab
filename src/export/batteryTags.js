@@ -28,6 +28,9 @@ const AQUAMAD_GUIDE_TAGS = {
   pierna_90: {
     angulo_caida_atras: { test: 'pierna_90', metric: 'angulo_caida_atras' },
   },
+  elevaciones_colgada: {
+    angulo_maximo: { test: 'elevaciones_colgada', metric: 'angulo_maximo' },
+  },
 };
 
 export function resolveAquamadTag(guideId, planKey) {

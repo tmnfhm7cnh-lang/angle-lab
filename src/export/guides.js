@@ -11,11 +11,12 @@
  * src/export/batteryTags.js for how (and whether) a `key` becomes an exported tag — that mapping,
  * not this file, is the only AQUAMAD-specific part of the whole guide feature.
  *
- * Five guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
- * leg raised), `aguante_v` (V-sit hold) and `pierna_90` (leg raised backward to 90°) — and only
- * their angle photo metrics from catalogRef.js — no `cm` metric is buildable yet (those are
- * DISTANCE measurements, and F6's calibration UI doesn't exist yet: without it a distance only
- * ever comes out in pixels, never real cm — see catalogRef.js).
+ * Six guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
+ * leg raised), `aguante_v` (V-sit hold), `pierna_90` (leg raised backward to 90°) and
+ * `elevaciones_colgada` (hanging leg raises) — and only their angle photo metrics from
+ * catalogRef.js — no `cm` metric is buildable yet (those are DISTANCE measurements, and F6's
+ * calibration UI doesn't exist yet: without it a distance only ever comes out in pixels, never
+ * real cm — see catalogRef.js).
  * `puente`'s and `puente_pierna`'s `desviacion_brazo` (arm deviation from vertical) is a second,
  * separate gap: it needs a real-world vertical reference tapped in the photo — Daniel confirmed
  * that approach on 2026-09-26, but it needs a new measurement kind (a segment's orientation
@@ -58,6 +59,14 @@
  * the trunk, not from a fixed floor/vertical reference. Same shoulder-hip-ankle construction as
  * `aguante_v`, same reasoning: nothing here says the working leg is bent, so the ray goes to the
  * ankle, not the knee.
+ *
+ * `elevaciones_colgada`'s `angulo_maximo` is the one of these six with the least guessing: the
+ * battery's own criterion names the angle's two sides explicitly — "12 elevaciones por encima de
+ * 90° respecto al tronco" — and bateria-test-seco-federacion-madrid.md's fuller version confirms
+ * straight legs ("piernas juntas, apretadas, pies en punta") through the whole hold, including the
+ * 5" "carpa" (pike) top position this photo is taken at. Same shoulder-hip-ankle construction, same
+ * vertex, for the same reason as `aguante_v` and `pierna_90` — trunk and legs are exactly what a
+ * hanging pike hold is judged on.
  */
 export const GUIDES = [
   {
@@ -122,6 +131,18 @@ export const GUIDES = [
     ],
     plans: [
       { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_caida_atras', label: 'Real backward angle' },
+    ],
+  },
+  {
+    id: 'elevaciones_colgada',
+    label: 'Hanging leg raises (elevaciones_colgada)',
+    landmarks: [
+      { id: 'shoulder', label: 'Shoulder' },
+      { id: 'hip', label: 'Hip' },
+      { id: 'ankle', label: 'Ankle' },
+    ],
+    plans: [
+      { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_maximo', label: 'Maximum angle' },
     ],
   },
 ];
