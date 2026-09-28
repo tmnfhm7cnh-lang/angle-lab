@@ -451,6 +451,68 @@ html, body {
   text-align: left;
 }
 
+#history-dialog {
+  max-width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--al-surface-2);
+  color: var(--al-ink);
+  border: var(--al-border);
+  border-radius: var(--al-radius-lg);
+  padding: var(--al-space-6) var(--al-space-7);
+  box-shadow: var(--al-shadow-3);
+}
+
+#history-dialog::backdrop {
+  background: var(--al-scrim);
+}
+
+#history-dialog h2 {
+  font-size: var(--al-text-lg);
+  margin: 0 0 var(--al-space-3);
+}
+
+#history-dialog > button {
+  margin-top: var(--al-space-3);
+}
+
+#history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--al-space-3);
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--al-space-3);
+  padding: var(--al-space-3);
+  background: var(--al-surface-3);
+  border: var(--al-border);
+  border-radius: var(--al-radius-md);
+}
+
+.history-code-input {
+  flex: 0 0 96px;
+  background: var(--al-well);
+  border: var(--al-border);
+  color: var(--al-ink);
+  border-radius: var(--al-radius-sm);
+  padding: var(--al-space-2) var(--al-space-3);
+  font-size: var(--al-text-sm);
+  min-width: 0;
+}
+
+.history-meta {
+  flex: 1 1 auto;
+  font-size: var(--al-text-xs);
+  color: var(--al-ink-muted);
+}
+
+.history-row button {
+  flex: 0 0 auto;
+}
+
 #export-dialog {
   max-width: min(640px, 92vw);
   max-height: 85vh;

@@ -29,6 +29,11 @@ import { formatLength, formatAngle } from '../core/units.js';
 import {
   saveActiveProject,
   loadActiveProject,
+  saveProject,
+  loadProject,
+  listProjects,
+  deleteProject,
+  setActiveProjectId,
   saveBlob,
   loadBlob,
   clearAll,
@@ -67,7 +72,12 @@ const guideListContainer = document.getElementById('guide-list');
 const protocolButton = document.getElementById('protocol-button');
 const protocolDialog = document.getElementById('protocol-dialog');
 const protocolCloseButton = document.getElementById('protocol-close-button');
-const startOverButton = document.getElementById('start-over-button');
+const newProjectButton = document.getElementById('new-project-button');
+const historyButton = document.getElementById('history-button');
+const historyDialog = document.getElementById('history-dialog');
+const historyCloseButton = document.getElementById('history-close-button');
+const historyList = document.getElementById('history-list');
+const historyDeleteAllButton = document.getElementById('history-delete-all-button');
 const errorBar = document.getElementById('error-bar');
 const storageBar = document.getElementById('storage-bar');
 const exportButton = document.getElementById('export-button');
@@ -154,7 +164,7 @@ async function checkStorageHealth() {
   }
   storageBar.hidden = false;
   storageBar.textContent =
-    `Device storage is ${Math.round(ratio * 100)}% full. Use "Start over" to free space, ` +
+    `Device storage is ${Math.round(ratio * 100)}% full. Open History to delete old projects, ` +
     `or export what you need, before the browser evicts it on its own.`;
 }
 
@@ -833,25 +843,153 @@ canvas.addEventListener('wheel', () => {
   wheelIdleTimer = setTimeout(ensureDetailForZoom, 220);
 }, { passive: true });
 
-startOverButton.addEventListener('click', async () => {
-  if (!confirm('Delete everything saved on this device (photos, points, measurements)? This cannot be undone.')) return;
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-  }
-  pendingSaveData = null;
-  await clearAll();
+// Shared by "New project", opening a project from History, and the
+// storage-pressure "Delete all" — every path that swaps out `project` and
+// `image` for a blank or freshly-loaded slate needs the same reset.
+function resetEditingState() {
   if (image?.displayBitmap) image.displayBitmap.close();
   image = null;
-  project = createProject();
   viewport = createViewport();
   currentDetailLongestSide = MAX_DISPLAY_SIDE;
   selectedEntityId = null;
   selectedEntityType = null;
   pendingPointIds = [];
   clearError();
+}
+
+function cancelPendingSave() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  pendingSaveData = null;
+}
+
+// LOTE 5 §3: no longer destructive. A project is multi- since this lote —
+// "New project" saves whatever is on screen (if it has at least one photo;
+// an untouched blank project isn't worth a History row) and starts a blank
+// one, exactly like opening a fresh client file. Actually deleting a
+// project is now its own explicit action, in History.
+newProjectButton.addEventListener('click', async () => {
+  cancelPendingSave();
+  if (project.images.length > 0) {
+    await saveProject(serialize(project));
+  }
+  resetEditingState();
+  project = createProject();
+  await setActiveProjectId(project.id);
   storageBar.hidden = true;
   scheduleRender();
+});
+
+function formatProjectDate(iso) {
+  return iso ? iso.slice(0, 10) : '';
+}
+
+async function renderHistoryList() {
+  const projects = await listProjects();
+  projects.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  historyList.innerHTML = '';
+  if (!projects.length) {
+    historyList.textContent = 'No saved projects yet.';
+    return;
+  }
+  for (const summary of projects) {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+
+    const codeInput = document.createElement('input');
+    codeInput.type = 'text';
+    codeInput.className = 'history-code-input';
+    codeInput.placeholder = 'sin código';
+    codeInput.value = summary.subjectCode;
+    codeInput.addEventListener('change', async () => {
+      const data = await loadProject(summary.id);
+      if (!data) return;
+      let full;
+      try {
+        full = deserialize(data);
+      } catch (err) {
+        showError(err.message);
+        return;
+      }
+      setSubjectCode(full, codeInput.value.trim());
+      await saveProject(serialize(full));
+      // Editing the row for the project currently open must not let a stale
+      // in-memory copy overwrite this edit on the next autosave.
+      if (project.id === summary.id) setSubjectCode(project, codeInput.value.trim());
+    });
+
+    const meta = document.createElement('span');
+    meta.className = 'history-meta';
+    const photoWord = summary.imageCount === 1 ? 'photo' : 'photos';
+    meta.textContent = `${formatProjectDate(summary.updatedAt)} · ${summary.imageCount} ${photoWord}`;
+
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'bar-button';
+    const isCurrent = summary.id === project.id;
+    openBtn.textContent = isCurrent ? 'Current' : 'Open';
+    openBtn.disabled = isCurrent;
+    openBtn.addEventListener('click', () => openProject(summary.id));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'bar-button danger-button';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this project and its photos? This cannot be undone.')) return;
+      await deleteProject(summary.id);
+      if (summary.id === project.id) {
+        cancelPendingSave();
+        resetEditingState();
+        project = createProject();
+        await setActiveProjectId(project.id);
+        scheduleRender();
+      }
+      renderHistoryList();
+    });
+
+    row.append(codeInput, meta, openBtn, deleteBtn);
+    historyList.appendChild(row);
+  }
+}
+
+async function openProject(id) {
+  const data = await loadProject(id);
+  if (!data) return;
+  let restored;
+  try {
+    restored = deserialize(data);
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  cancelPendingSave();
+  resetEditingState();
+  project = restored;
+  await setActiveProjectId(project.id);
+  historyDialog.close();
+  await loadImageForActiveProject();
+  scheduleRender();
+}
+
+historyButton.addEventListener('click', () => {
+  renderHistoryList();
+  historyDialog.showModal();
+});
+historyCloseButton.addEventListener('click', () => historyDialog.close());
+
+historyDeleteAllButton.addEventListener('click', async () => {
+  if (!confirm('Delete every saved project on this device, including the one open now? This cannot be undone.')) return;
+  cancelPendingSave();
+  await clearAll();
+  resetEditingState();
+  project = createProject();
+  await setActiveProjectId(project.id);
+  storageBar.hidden = true;
+  scheduleRender();
+  renderHistoryList();
 });
 
 function todayISO() {
@@ -1041,17 +1179,12 @@ setupMagnifierCanvas();
 // only the active image's bitmap is ever rendered today (there is no
 // switch-image UI yet, see db.js's module doc), so restoring just that one
 // blob is all a startup actually needs.
-async function restoreProject() {
-  const data = await loadActiveProject();
-  if (!data) return;
-  let restored;
-  try {
-    restored = deserialize(data);
-  } catch (err) {
-    console.warn('angle-lab: saved project could not be restored', err);
-    return;
-  }
-  project = restored;
+// Shared by startup restore and openProject (History): loads the Blob for
+// project.activeImageId, if any, and decodes it into the live `image`. Only
+// the active image's bitmap is ever rendered today (there is no
+// switch-image UI yet, see db.js's module doc), so this is all either path
+// needs.
+async function loadImageForActiveProject() {
   const activeImage = project.images.find((img) => img.id === project.activeImageId);
   if (!activeImage) return;
   const blob = await loadBlob(activeImage.id);
@@ -1064,6 +1197,20 @@ async function restoreProject() {
   } catch (err) {
     showError(err.message);
   }
+}
+
+async function restoreProject() {
+  const data = await loadActiveProject();
+  if (!data) return;
+  let restored;
+  try {
+    restored = deserialize(data);
+  } catch (err) {
+    console.warn('angle-lab: saved project could not be restored', err);
+    return;
+  }
+  project = restored;
+  await loadImageForActiveProject();
 }
 
 requestPersistence();

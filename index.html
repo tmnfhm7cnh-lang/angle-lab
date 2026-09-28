@@ -29,8 +29,9 @@
       <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
       <button id="protocol-button" class="bar-button" type="button">Protocol</button>
       <button id="guide-button" class="bar-button" type="button">Guide</button>
+      <button id="history-button" class="bar-button" type="button">History</button>
       <button id="export-button" class="bar-button" type="button">Export</button>
-      <button id="start-over-button" class="bar-button danger-button" type="button">Start over</button>
+      <button id="new-project-button" class="bar-button" type="button">New project</button>
       <div class="readout">
         <span class="readout-label" id="readout-label">Zoom</span>
         <span class="readout-value" id="readout-value">100<span class="readout-unit">%</span></span>
@@ -123,6 +124,17 @@
     </p>
     <div id="guide-list"></div>
     <button id="guide-close-button" class="bar-button" type="button">Close</button>
+  </dialog>
+  <dialog id="history-dialog">
+    <h2>History</h2>
+    <p class="export-hint">
+      Every project saved on this device, most recent first. Subject code is editable right here.
+      "New project" (top bar) saves the one you're on and starts a blank one — nothing here is ever
+      deleted except with the buttons below.
+    </p>
+    <div id="history-list"></div>
+    <button id="history-delete-all-button" class="bar-button danger-button" type="button">Delete all projects</button>
+    <button id="history-close-button" class="bar-button" type="button">Close</button>
   </dialog>
   <dialog id="export-dialog">
     <h2>Export</h2>
