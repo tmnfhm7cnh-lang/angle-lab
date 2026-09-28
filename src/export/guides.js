@@ -11,18 +11,22 @@
  * src/export/batteryTags.js for how (and whether) a `key` becomes an exported tag — that mapping,
  * not this file, is the only AQUAMAD-specific part of the whole guide feature.
  *
- * Six guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
- * leg raised), `aguante_v` (V-sit hold), `pierna_90` (leg raised backward to 90°) and
- * `elevaciones_colgada` (hanging leg raises) — and only their angle photo metrics from
- * catalogRef.js — no `cm` metric is buildable yet (those are DISTANCE measurements, and F6's
- * calibration UI doesn't exist yet: without it a distance only ever comes out in pixels, never
- * real cm — see catalogRef.js).
- * `puente`'s and `puente_pierna`'s `desviacion_brazo` (arm deviation from vertical) is a second,
- * separate gap: it needs a real-world vertical reference tapped in the photo — Daniel confirmed
- * that approach on 2026-09-26, but it needs a new measurement kind (a segment's orientation
- * against a second, reference segment) that core/model.js does not have yet; see ESTADO.md's
- * "vertical de referencia" entry. Both gaps are left out on purpose rather than guessed at — every
- * plan below is an ordinary three-point joint angle with neither gap.
+ * Seven guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
+ * leg raised), `aguante_v` (V-sit hold), `pierna_90` (leg raised backward to 90°),
+ * `elevaciones_colgada` (hanging leg raises) and `flexion` (push-ups) — the last is the first
+ * DISTANCE plan among these guides, not another ANGLE: `flexion`'s only photo metric
+ * (`profundidad`, chest-to-floor depth) is `cm`, and F6's calibration UI still doesn't exist for
+ * any image today, so this guide's distance always comes out in pixels with csvExport.js's
+ * existing "sin calibrar" note, never a fabricated cm value — Daniel confirmed on 2026-09-28 he
+ * wants it built anyway, so it starts giving real cm the moment F6 ships rather than waiting on
+ * it. Every other guide below only builds angle metrics from catalogRef.js.
+ * `puente`'s and `puente_pierna`'s `desviacion_brazo` (arm deviation from vertical) is a
+ * different, still-open gap: it needs a real-world vertical reference tapped in the photo — Daniel
+ * confirmed that approach on 2026-09-26, but it needs a new measurement kind (a segment's
+ * orientation against a second, reference segment) that core/model.js does not have yet; see
+ * ESTADO.md's "vertical de referencia" entry. That one is left out on purpose rather than guessed
+ * at — every angle plan below is an ordinary three-point joint angle with neither this gap nor a
+ * missing measurement kind.
  *
  * `flexion_codo` and `flexion_rodilla` (elbow/knee flexion) use the standard goniometry
  * definition — the angle at the joint between the bone above it and the bone below it — not a
@@ -60,13 +64,20 @@
  * `aguante_v`, same reasoning: nothing here says the working leg is bent, so the ray goes to the
  * ankle, not the knee.
  *
- * `elevaciones_colgada`'s `angulo_maximo` is the one of these six with the least guessing: the
- * battery's own criterion names the angle's two sides explicitly — "12 elevaciones por encima de
- * 90° respecto al tronco" — and bateria-test-seco-federacion-madrid.md's fuller version confirms
+ * `elevaciones_colgada`'s `angulo_maximo` is the one of the angle guides with the least guessing:
+ * the battery's own criterion names the angle's two sides explicitly — "12 elevaciones por encima
+ * de 90° respecto al tronco" — and bateria-test-seco-federacion-madrid.md's fuller version confirms
  * straight legs ("piernas juntas, apretadas, pies en punta") through the whole hold, including the
  * 5" "carpa" (pike) top position this photo is taken at. Same shoulder-hip-ankle construction, same
  * vertex, for the same reason as `aguante_v` and `pierna_90` — trunk and legs are exactly what a
  * hanging pike hold is judged on.
+ *
+ * `flexion`'s `profundidad` (chest-to-floor depth) needs only two landmarks, not three — a
+ * DISTANCE plan, `a`/`b` instead of `a`/`vertex`/`c` (core/guides.js's `applyGuide` already
+ * branches on `plan.kind` for this). The battery's own criterion is what the two landmarks are:
+ * "profundidad pecho-suelo" at the bottom of the rep, so `chest` and `floor`, photographed at the
+ * lowest point of the repetition — no goniometry convention needed, the metric name already says
+ * where the two points go.
  */
 export const GUIDES = [
   {
@@ -143,6 +154,17 @@ export const GUIDES = [
     ],
     plans: [
       { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_maximo', label: 'Maximum angle' },
+    ],
+  },
+  {
+    id: 'flexion',
+    label: 'Push-up (flexion)',
+    landmarks: [
+      { id: 'chest', label: 'Chest' },
+      { id: 'floor', label: 'Floor' },
+    ],
+    plans: [
+      { kind: 'distance', a: 'chest', b: 'floor', key: 'profundidad', label: 'Chest-to-floor depth' },
     ],
   },
 ];

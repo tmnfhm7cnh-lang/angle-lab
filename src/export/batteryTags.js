@@ -31,6 +31,9 @@ const AQUAMAD_GUIDE_TAGS = {
   elevaciones_colgada: {
     angulo_maximo: { test: 'elevaciones_colgada', metric: 'angulo_maximo' },
   },
+  flexion: {
+    profundidad: { test: 'flexion', metric: 'profundidad' },
+  },
 };
 
 export function resolveAquamadTag(guideId, planKey) {
