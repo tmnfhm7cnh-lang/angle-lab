@@ -11,11 +11,11 @@
  * src/export/batteryTags.js for how (and whether) a `key` becomes an exported tag — that mapping,
  * not this file, is the only AQUAMAD-specific part of the whole guide feature.
  *
- * Four guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
- * leg raised) and `aguante_v` (V-sit hold) — and only their angle photo metrics from
- * catalogRef.js — no `cm` metric is buildable yet (those are DISTANCE measurements, and F6's
- * calibration UI doesn't exist yet: without it a distance only ever comes out in pixels, never
- * real cm — see catalogRef.js).
+ * Five guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
+ * leg raised), `aguante_v` (V-sit hold) and `pierna_90` (leg raised backward to 90°) — and only
+ * their angle photo metrics from catalogRef.js — no `cm` metric is buildable yet (those are
+ * DISTANCE measurements, and F6's calibration UI doesn't exist yet: without it a distance only
+ * ever comes out in pixels, never real cm — see catalogRef.js).
  * `puente`'s and `puente_pierna`'s `desviacion_brazo` (arm deviation from vertical) is a second,
  * separate gap: it needs a real-world vertical reference tapped in the photo — Daniel confirmed
  * that approach on 2026-09-26, but it needs a new measurement kind (a segment's orientation
@@ -48,6 +48,16 @@
  * estirados" (fully straight), so the leg ray goes to the ankle — same choice puntos-referencia
  * makes for pino when the leg is straight, not the knee fallback it lists for when the ankle isn't
  * visible. Nothing new invented: same construction, new body position.
+ *
+ * `pierna_90`'s `angulo_caida_atras` — another position outside the biblioteca doc — is the same
+ * trunk-to-leg hip angle again, this time for the backward direction only (catalogRef.js has no
+ * metric for the front/side directions: those are the compañera's stopwatch, not a photo).
+ * bateria-test-seco-federacion-madrid.md's own text names the exact compensation this photo is
+ * for: "Al pasar atrás, ligero movimiento del tronco hacia delante para conservar la altura" — the
+ * trunk tilts forward to fake the height, so the number that catches it has to be measured from
+ * the trunk, not from a fixed floor/vertical reference. Same shoulder-hip-ankle construction as
+ * `aguante_v`, same reasoning: nothing here says the working leg is bent, so the ray goes to the
+ * ankle, not the knee.
  */
 export const GUIDES = [
   {
@@ -100,6 +110,18 @@ export const GUIDES = [
     ],
     plans: [
       { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_v', label: 'V angle' },
+    ],
+  },
+  {
+    id: 'pierna_90',
+    label: 'Leg at 90° (pierna_90)',
+    landmarks: [
+      { id: 'shoulder', label: 'Shoulder' },
+      { id: 'hip', label: 'Hip' },
+      { id: 'ankle', label: 'Ankle' },
+    ],
+    plans: [
+      { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_caida_atras', label: 'Real backward angle' },
     ],
   },
 ];

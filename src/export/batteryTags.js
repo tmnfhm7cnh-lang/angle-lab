@@ -25,6 +25,9 @@ const AQUAMAD_GUIDE_TAGS = {
   aguante_v: {
     angulo_v: { test: 'aguante_v', metric: 'angulo_v' },
   },
+  pierna_90: {
+    angulo_caida_atras: { test: 'pierna_90', metric: 'angulo_caida_atras' },
+  },
 };
 
 export function resolveAquamadTag(guideId, planKey) {

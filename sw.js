@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when any file below changes. */
-const CACHE = 'angle-lab-v8';
+const CACHE = 'angle-lab-v9';
 
 /* Without these the app does not run: if one is missing the install must fail loudly. */
 const CORE = [
