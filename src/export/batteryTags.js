@@ -22,6 +22,9 @@ const AQUAMAD_GUIDE_TAGS = {
   puente_pierna: {
     flexion_rodilla: { test: 'puente_pierna', metric: 'flexion_rodilla' },
   },
+  aguante_v: {
+    angulo_v: { test: 'aguante_v', metric: 'angulo_v' },
+  },
 };
 
 export function resolveAquamadTag(guideId, planKey) {

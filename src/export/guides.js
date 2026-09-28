@@ -11,10 +11,11 @@
  * src/export/batteryTags.js for how (and whether) a `key` becomes an exported tag — that mapping,
  * not this file, is the only AQUAMAD-specific part of the whole guide feature.
  *
- * Three guides today: `puente` (bridge), `espagat` (split) and `puente_pierna` (bridge with one
- * leg raised) — and only their angle photo metrics from catalogRef.js — no `cm` metric is
- * buildable yet (those are DISTANCE measurements, and F6's calibration UI doesn't exist yet:
- * without it a distance only ever comes out in pixels, never real cm — see catalogRef.js).
+ * Four guides today: `puente` (bridge), `espagat` (split), `puente_pierna` (bridge with one
+ * leg raised) and `aguante_v` (V-sit hold) — and only their angle photo metrics from
+ * catalogRef.js — no `cm` metric is buildable yet (those are DISTANCE measurements, and F6's
+ * calibration UI doesn't exist yet: without it a distance only ever comes out in pixels, never
+ * real cm — see catalogRef.js).
  * `puente`'s and `puente_pierna`'s `desviacion_brazo` (arm deviation from vertical) is a second,
  * separate gap: it needs a real-world vertical reference tapped in the photo — Daniel confirmed
  * that approach on 2026-09-26, but it needs a new measurement kind (a segment's orientation
@@ -38,6 +39,15 @@
  * `puente`'s, on the leg still on the ground. catalogRef.js registers no `flexion_codo` for
  * `puente_pierna` at all (unlike `puente`), so the elbow is not re-measured here — only the
  * standing leg's hip/knee/ankle.
+ *
+ * `aguante_v`'s `angulo_v` is not in the biblioteca's split/puente/pino doc (that doc only covers
+ * those three positions), but its own description in metricas-continuas-bateria-seco.md #16 —
+ * "Ángulo de la V en el mantenimiento (se abre con la fatiga)" — is the same trunk-to-leg hip
+ * angle that doc already defines for `puente` and pino: vertex hip, one ray to the shoulder (trunk
+ * direction), the other to the limit of the leg. The battery's own criterion has the legs "totalmente
+ * estirados" (fully straight), so the leg ray goes to the ankle — same choice puntos-referencia
+ * makes for pino when the leg is straight, not the knee fallback it lists for when the ankle isn't
+ * visible. Nothing new invented: same construction, new body position.
  */
 export const GUIDES = [
   {
@@ -78,6 +88,18 @@ export const GUIDES = [
     ],
     plans: [
       { kind: 'angle', a: 'hip', vertex: 'knee', c: 'ankle', key: 'flexion_rodilla', label: 'Knee flexion' },
+    ],
+  },
+  {
+    id: 'aguante_v',
+    label: 'V-hold (aguante_v)',
+    landmarks: [
+      { id: 'shoulder', label: 'Shoulder' },
+      { id: 'hip', label: 'Hip' },
+      { id: 'ankle', label: 'Ankle' },
+    ],
+    plans: [
+      { kind: 'angle', a: 'shoulder', vertex: 'hip', c: 'ankle', key: 'angulo_v', label: 'V angle' },
     ],
   },
 ];
