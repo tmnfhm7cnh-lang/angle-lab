@@ -323,6 +323,34 @@ html, body {
   color: var(--al-attention);
 }
 
+/* LOTE 5 §6: shown once the club's season-end date (batteryTags.js's AQUAMAD_SEASON_END) has
+   passed and the warning hasn't been snoozed — same "avisa y espera confirmación" policy as
+   dryland-test-logger's own season banner, never an automatic purge. */
+#season-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--al-space-4);
+  padding: var(--al-space-3) var(--al-space-4);
+  font-size: var(--al-text-sm);
+  line-height: 1.4;
+  border-bottom: var(--al-border);
+  background: color-mix(in srgb, var(--al-attention) 16%, var(--al-bg));
+  color: var(--al-attention);
+}
+
+#season-bar[hidden] {
+  display: none;
+}
+
+.season-bar-actions {
+  display: flex;
+  gap: var(--al-space-3);
+  flex: 0 0 auto;
+}
+
 /* LOTE 5 §4: shown only while this session arrived from dryland-test-logger's "Analizar en
    angle-lab" bridge (a ?return= URL param) AND the requested test/metric already has a tagged
    reading on the current photo — the send-back button never appears before there is a real

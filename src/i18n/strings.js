@@ -115,6 +115,12 @@ const STRINGS = {
     storageWarning:
       'Device storage is {pct}% full. Open History to delete old projects, or export what you need, before the browser evicts it on its own.',
 
+    seasonEndedBanner: 'The season ended on {end}. Delete this device\'s projects, or wait?',
+    seasonPurgeButton: 'Delete season projects',
+    seasonSnoozeButton: 'Remind me in 30 days',
+    seasonPurgeConfirm:
+      'This deletes {n} project(s) and their photos from this device. This cannot be undone: export anything you want to keep first. Sure?',
+
     repeatTapMoreOne: 'Tap the same point {n} more time.',
     repeatTapMoreMany: 'Tap the same point {n} more times.',
     repeatResult: 'Your own repeatability: ±{rms} px{realText} typical, {max} px worst of {count} taps. Tap again to redo.',
@@ -221,6 +227,12 @@ const STRINGS = {
 
     storageWarning:
       'El almacenamiento del dispositivo está al {pct}%. Abre Historial para borrar proyectos antiguos, o exporta lo que necesites, antes de que el navegador lo libere por su cuenta.',
+
+    seasonEndedBanner: 'La temporada terminó el {end}. ¿Borras los proyectos de este dispositivo, o prefieres esperar?',
+    seasonPurgeButton: 'Borrar proyectos de la temporada',
+    seasonSnoozeButton: 'Recordarlo en 30 días',
+    seasonPurgeConfirm:
+      'Se borran {n} proyecto(s) y sus fotos de este dispositivo. No hay deshacer: exporta antes si hay algo que quieras conservar. ¿Seguro?',
 
     repeatTapMoreOne: 'Toca el mismo punto {n} vez más.',
     repeatTapMoreMany: 'Toca el mismo punto {n} veces más.',

@@ -43,7 +43,7 @@ import {
 } from '../storage/db.js';
 import { readingsForImage, buildExportCsv, resolveTaggedReading } from '../export/csvExport.js';
 import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
-import { resolveAquamadTag } from '../export/batteryTags.js';
+import { resolveAquamadTag, AQUAMAD_SEASON_END } from '../export/batteryTags.js';
 import { t, getLang, setLang } from '../i18n/strings.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
@@ -81,6 +81,10 @@ const historyList = document.getElementById('history-list');
 const historyDeleteAllButton = document.getElementById('history-delete-all-button');
 const errorBar = document.getElementById('error-bar');
 const storageBar = document.getElementById('storage-bar');
+const seasonBar = document.getElementById('season-bar');
+const seasonBarText = document.getElementById('season-bar-text');
+const seasonPurgeButton = document.getElementById('season-purge-button');
+const seasonSnoozeButton = document.getElementById('season-snooze-button');
 const returnBar = document.getElementById('return-bar');
 const returnBarText = document.getElementById('return-bar-text');
 const returnBarButton = document.getElementById('return-bar-button');
@@ -121,6 +125,7 @@ langButton.addEventListener('click', () => {
   scheduleRender();
   if (exportDialog.open) renderExportReadings();
   if (historyDialog.open) renderHistoryList();
+  if (!seasonBar.hidden) checkSeasonBanner();
 });
 
 applyStrings();
@@ -220,6 +225,65 @@ async function checkStorageHealth() {
   storageBar.hidden = false;
   storageBar.textContent = t('storageWarning', { pct: Math.round(ratio * 100) });
 }
+
+// LOTE 5 §6: mirrors dryland-test-logger's own season banner (app.js there) — same club, same
+// AQUAMAD_SEASON_END (batteryTags.js), same policy: never purges on its own, only lights the
+// warning until an explicit "Delete" or "Remind me later" click. The snooze date lives in
+// localStorage (same tolerance-for-loss as the language preference above) since this app has no
+// single settings row the way dryland-test-logger's `db` object does.
+const SEASON_SNOOZE_KEY = 'angle-lab/seasonPurgeSnoozeUntil';
+
+function seasonEnded() {
+  return todayISO() > AQUAMAD_SEASON_END;
+}
+
+function getSeasonSnoozeUntil() {
+  try {
+    return localStorage.getItem(SEASON_SNOOZE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setSeasonSnoozeUntil(dateISO) {
+  try {
+    localStorage.setItem(SEASON_SNOOZE_KEY, dateISO);
+  } catch {
+    // Losing the snooze just means the banner reappears sooner than intended — not worth
+    // throwing into a caller with no recovery path, same rule as everywhere else here.
+  }
+}
+
+async function checkSeasonBanner() {
+  const snoozedUntil = getSeasonSnoozeUntil();
+  if (!seasonEnded() || (snoozedUntil && snoozedUntil >= todayISO())) {
+    seasonBar.hidden = true;
+    return;
+  }
+  seasonBar.hidden = false;
+  seasonBarText.textContent = t('seasonEndedBanner', { end: AQUAMAD_SEASON_END });
+}
+
+seasonPurgeButton.addEventListener('click', async () => {
+  const projects = await listProjects();
+  if (!confirm(t('seasonPurgeConfirm', { n: projects.length }))) return;
+  cancelPendingSave();
+  await clearAll();
+  resetEditingState();
+  project = createProject();
+  await setActiveProjectId(project.id);
+  storageBar.hidden = true;
+  seasonBar.hidden = true;
+  scheduleRender();
+  if (historyDialog.open) renderHistoryList();
+});
+
+seasonSnoozeButton.addEventListener('click', () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  setSeasonSnoozeUntil(d.toISOString().slice(0, 10));
+  seasonBar.hidden = true;
+});
 
 // Debounced autosave, flushed synchronously on backgrounding — same shape as
 // dryland-test-logger's LOTE 1 §1 fix, for the same reason: waiting out a
@@ -1329,6 +1393,7 @@ requestPersistence();
 restoreProject().then(() => {
   applyReturnContextOnBoot();
   checkStorageHealth();
+  checkSeasonBanner();
 });
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -39,3 +39,14 @@ const AQUAMAD_GUIDE_TAGS = {
 export function resolveAquamadTag(guideId, planKey) {
   return AQUAMAD_GUIDE_TAGS[guideId]?.[planKey] ?? null;
 }
+
+/**
+ * LOTE 5 §6: the club's season calendar, not the battery's — lives here anyway, next to
+ * AQUAMAD_GUIDE_TAGS, for the same sellability reason (module doc above): a build without
+ * AQUAMAD's battery has no season-end date to warn about either, and this is the one file that
+ * gets to know either fact. Mirrors dryland-test-logger's own SEASON_END (catalog.js): same club,
+ * same season, same "septiembre-mayo, posible junio" contract read as its late extreme so the
+ * warning never fires early if the season runs into June. Confirm with Daniel when the date
+ * nears, in case the club closes earlier or later than expected.
+ */
+export const AQUAMAD_SEASON_END = '2027-06-30';
