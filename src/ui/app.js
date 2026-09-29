@@ -44,6 +44,7 @@ import {
 import { readingsForImage, buildExportCsv, resolveTaggedReading } from '../export/csvExport.js';
 import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
 import { resolveAquamadTag } from '../export/batteryTags.js';
+import { t, getLang, setLang } from '../i18n/strings.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
 const MAGNIFIER_SIZE_CSS_PX = 120;
@@ -94,6 +95,35 @@ const exportReadingsContainer = document.getElementById('export-readings');
 const exportUntaggedNote = document.getElementById('export-untagged-note');
 const exportPngButton = document.getElementById('export-png-button');
 const exportCsvButton = document.getElementById('export-csv-button');
+const langButton = document.getElementById('lang-button');
+
+// LOTE 5 §5: fills every [data-i18n]/[data-i18n-html] node from the current language's table —
+// same pattern dryland-test-logger's own applyStrings() already uses (app.js there), kept as a
+// separate implementation on purpose (LOTE 3 §1). Runs once at boot and again on every language
+// switch; nothing here depends on which project or photo is open.
+function applyStrings() {
+  document.title = t('pageTitle');
+  document.documentElement.lang = getLang();
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
+  for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  langButton.textContent = t('langButton');
+}
+
+langButton.addEventListener('click', () => {
+  setLang(getLang() === 'es' ? 'en' : 'es');
+  applyStrings();
+  // Every other dynamic label on screen right now (guide readout, readouts, export dialog,
+  // history list, return-bar) is rebuilt by the same functions that already run on every
+  // render/dialog-open — re-triggering them here keeps the switch instant instead of waiting for
+  // the next unrelated state change to happen to repaint them.
+  updateGuideReadout();
+  scheduleRender();
+  if (exportDialog.open) renderExportReadings();
+  if (historyDialog.open) renderHistoryList();
+});
+
+applyStrings();
 
 // LOTE 2 §2.3(a): a static checklist plus what the app does and doesn't
 // guarantee — no ground truth here, just the physics of a single photo.
@@ -188,9 +218,7 @@ async function checkStorageHealth() {
     return;
   }
   storageBar.hidden = false;
-  storageBar.textContent =
-    `Device storage is ${Math.round(ratio * 100)}% full. Open History to delete old projects, ` +
-    `or export what you need, before the browser evicts it on its own.`;
+  storageBar.textContent = t('storageWarning', { pct: Math.round(ratio * 100) });
 }
 
 // Debounced autosave, flushed synchronously on backgrounding — same shape as
@@ -333,18 +361,18 @@ function updateReadout() {
   const readings = image && project.activeImageId ? readingsForImage(project, project.activeImageId) : [];
   const selected = readings.find((r) => r.id === selectedEntityId);
   if (!selected) {
-    readoutLabel.textContent = 'Zoom';
+    readoutLabel.textContent = t('wordZoom');
     readoutValue.classList.remove('readout-value--empty');
     readoutValue.innerHTML = `${Math.round(viewport.scale * 100)}<span class="readout-unit">%</span>`;
     return;
   }
   if (selected.type === 'angle') {
     const decimals = decimalsForSigma(selected.sigmaDegrees);
-    readoutLabel.textContent = 'Angle';
+    readoutLabel.textContent = t('wordAngle');
     readoutValue.classList.remove('readout-value--empty');
     readoutValue.textContent = formatAngle(selected.degrees, decimals);
   } else {
-    readoutLabel.textContent = 'Distance';
+    readoutLabel.textContent = t('wordDistance');
     readoutValue.classList.remove('readout-value--empty');
     if (Number.isFinite(selected.real)) {
       const decimals = decimalsForSigma(selected.sigma);
@@ -481,8 +509,13 @@ function updateGuideReadout() {
   const landmark = nextLandmark(activeGuide, placedIds);
   guideReadout.hidden = false;
   guideReadout.textContent = landmark
-    ? `${activeGuide.label}: tap ${landmark.label} (${placedLandmarks.length + 1}/${activeGuide.landmarks.length}).`
-    : `${activeGuide.label}: done. Switch to Select to inspect or adjust.`;
+    ? t('guideReadoutWaiting', {
+        guide: activeGuide.label,
+        landmark: landmark.label,
+        n: placedLandmarks.length + 1,
+        total: activeGuide.landmarks.length,
+      })
+    : t('guideReadoutDone', { guide: activeGuide.label });
 }
 
 // LOTE 5 §4: shows only once the exact (test, metric) dryland-test-logger asked for is a
@@ -502,7 +535,13 @@ function updateReturnBar() {
     return;
   }
   returnBar.hidden = false;
-  returnBarText.textContent = `${returnContext.subjectCode || 'sin código'} · ${match.test}/${match.metric}: ${match.value} ${match.unit} — listo para enviar a seco`;
+  returnBarText.textContent = t('returnBarText', {
+    subject: returnContext.subjectCode || t('historyCodePlaceholder'),
+    test: match.test,
+    metric: match.metric,
+    value: match.value,
+    unit: match.unit,
+  });
   returnBarButton.onclick = () => {
     const target = new URL(returnContext.returnUrl);
     target.searchParams.set('value', match.value);
@@ -514,14 +553,14 @@ function updateReturnBar() {
 function renderGuideList() {
   guideListContainer.innerHTML = '';
   if (!GUIDES.length) {
-    guideListContainer.textContent = 'No guides yet.';
+    guideListContainer.textContent = t('guideListEmpty');
     return;
   }
   for (const guide of GUIDES) {
     const button = document.createElement('button');
     button.className = 'bar-button';
     button.type = 'button';
-    button.textContent = `${guide.label} — ${guide.landmarks.length} points`;
+    button.textContent = t('guideListItem', { label: guide.label, count: guide.landmarks.length });
     button.disabled = !image || !project.activeImageId;
     button.addEventListener('click', () => {
       guideDialog.close();
@@ -659,20 +698,21 @@ function repeatabilityRealSigma(pixelSigma) {
 function handleRepeatabilityTap(imagePoint) {
   repeatTaps.push(imagePoint);
   if (repeatTaps.length < REPEATABILITY_TAP_COUNT) {
+    const remaining = REPEATABILITY_TAP_COUNT - repeatTaps.length;
     repeatReadout.hidden = false;
-    repeatReadout.textContent = `Tap the same point ${REPEATABILITY_TAP_COUNT - repeatTaps.length} more time${
-      REPEATABILITY_TAP_COUNT - repeatTaps.length === 1 ? '' : 's'
-    }.`;
+    repeatReadout.textContent = t(remaining === 1 ? 'repeatTapMoreOne' : 'repeatTapMoreMany', { n: remaining });
     return;
   }
   const stats = repeatabilityStats(repeatTaps);
   const realSigma = repeatabilityRealSigma(stats.rmsPx);
   const realText = realSigma !== null ? ` (${formatLength(realSigma, project.displayUnit, 2)})` : '';
   repeatReadout.hidden = false;
-  repeatReadout.textContent =
-    `Your own repeatability: ±${stats.rmsPx.toFixed(1)} px${realText} typical, ` +
-    `${stats.maxDeviationPx.toFixed(1)} px worst of ${REPEATABILITY_TAP_COUNT} taps. ` +
-    `Tap again to redo.`;
+  repeatReadout.textContent = t('repeatResult', {
+    rms: stats.rmsPx.toFixed(1),
+    realText,
+    max: stats.maxDeviationPx.toFixed(1),
+    count: REPEATABILITY_TAP_COUNT,
+  });
   repeatTaps = [];
 }
 
@@ -943,7 +983,7 @@ async function renderHistoryList() {
   projects.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   historyList.innerHTML = '';
   if (!projects.length) {
-    historyList.textContent = 'No saved projects yet.';
+    historyList.textContent = t('historyEmpty');
     return;
   }
   for (const summary of projects) {
@@ -953,7 +993,7 @@ async function renderHistoryList() {
     const codeInput = document.createElement('input');
     codeInput.type = 'text';
     codeInput.className = 'history-code-input';
-    codeInput.placeholder = 'sin código';
+    codeInput.placeholder = t('historyCodePlaceholder');
     codeInput.value = summary.subjectCode;
     codeInput.addEventListener('change', async () => {
       const data = await loadProject(summary.id);
@@ -974,23 +1014,23 @@ async function renderHistoryList() {
 
     const meta = document.createElement('span');
     meta.className = 'history-meta';
-    const photoWord = summary.imageCount === 1 ? 'photo' : 'photos';
-    meta.textContent = `${formatProjectDate(summary.updatedAt)} · ${summary.imageCount} ${photoWord}`;
+    const photoWord = t(summary.imageCount === 1 ? 'historyPhotoOne' : 'historyPhotoMany');
+    meta.textContent = t('historyMeta', { date: formatProjectDate(summary.updatedAt), count: summary.imageCount, photoWord });
 
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
     openBtn.className = 'bar-button';
     const isCurrent = summary.id === project.id;
-    openBtn.textContent = isCurrent ? 'Current' : 'Open';
+    openBtn.textContent = isCurrent ? t('historyCurrent') : t('historyOpen');
     openBtn.disabled = isCurrent;
     openBtn.addEventListener('click', () => openProject(summary.id));
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'bar-button danger-button';
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.textContent = t('deleteButton');
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm('Delete this project and its photos? This cannot be undone.')) return;
+      if (!confirm(t('historyDeleteConfirm'))) return;
       await deleteProject(summary.id);
       if (summary.id === project.id) {
         cancelPendingSave();
@@ -1033,7 +1073,7 @@ historyButton.addEventListener('click', () => {
 historyCloseButton.addEventListener('click', () => historyDialog.close());
 
 historyDeleteAllButton.addEventListener('click', async () => {
-  if (!confirm('Delete every saved project on this device, including the one open now? This cannot be undone.')) return;
+  if (!confirm(t('historyDeleteAllConfirm'))) return;
   cancelPendingSave();
   await clearAll();
   resetEditingState();
@@ -1079,19 +1119,25 @@ async function shareFile(name, content, mime) {
 // reading's own kind — an angle can only be tagged with a 'grados' metric,
 // a distance only with a 'cm' one) so untagged readings stay obviously
 // untagged rather than silently exportable as blank rows.
+// 'good' | 'ok' | 'poor' from core/uncertainty.js — a fixed, small vocabulary, so a lookup here
+// is simpler than threading translation through the core module that computes it.
+function qualityWord(level) {
+  return t(level === 'good' ? 'qualityGood' : level === 'ok' ? 'qualityOk' : 'qualityPoor');
+}
+
 function updateUntaggedNote() {
   if (!image || !project.activeImageId) return;
   const readings = readingsForImage(project, project.activeImageId);
   const taggedCount = readings.filter((r) => r.tag).length;
   exportUntaggedNote.textContent = readings.length
-    ? `${taggedCount} of ${readings.length} tagged — only tagged readings export.`
-    : 'No angle/distance measurements on this photo yet.';
+    ? t('exportTaggedCount', { tagged: taggedCount, total: readings.length })
+    : t('exportNoMeasurements');
 }
 
 function renderExportReadings() {
   exportReadingsContainer.innerHTML = '';
   if (!image || !project.activeImageId) {
-    exportUntaggedNote.textContent = 'No photo loaded.';
+    exportUntaggedNote.textContent = t('exportNoPhoto');
     return;
   }
   const readings = readingsForImage(project, project.activeImageId);
@@ -1104,17 +1150,17 @@ function renderExportReadings() {
     label.className = 'export-reading-label';
     if (r.type === 'angle') {
       const decimals = decimalsForSigma(r.sigmaDegrees);
-      label.textContent = `Angle · ${formatAngle(r.degrees, decimals)} (${r.quality.level})`;
+      label.textContent = t('exportReadingAngle', { value: formatAngle(r.degrees, decimals), quality: qualityWord(r.quality.level) });
     } else {
       const decimals = decimalsForSigma(r.sigma);
       const realText = Number.isFinite(r.real)
         ? formatLength(r.real, r.unit, decimals)
-        : `${r.pixels.toFixed(1)} px (uncalibrated)`;
-      label.textContent = `Distance · ${realText} (${r.quality.level})`;
+        : `${r.pixels.toFixed(1)} px (${t('uncalibratedSuffix')})`;
+      label.textContent = t('exportReadingDistance', { value: realText, quality: qualityWord(r.quality.level) });
     }
 
     const testSelect = document.createElement('select');
-    testSelect.appendChild(new Option('— untagged —', ''));
+    testSelect.appendChild(new Option(t('exportUntaggedOption'), ''));
     for (const { test, testLabel } of testLabelsForKind(r.type)) {
       testSelect.appendChild(new Option(testLabel, test));
     }

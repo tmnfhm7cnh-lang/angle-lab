@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when any file below changes. */
-const CACHE = 'angle-lab-v13';
+const CACHE = 'angle-lab-v14';
 
 /* Without these the app does not run: if one is missing the install must fail loudly. */
 const CORE = [
@@ -7,6 +7,7 @@ const CORE = [
   'index.html',
   'src/ui/app.js',
   'src/ui/pointerGestures.js',
+  'src/i18n/strings.js',
   'src/core/geometry.js',
   'src/core/calibration.js',
   'src/core/hittest.js',

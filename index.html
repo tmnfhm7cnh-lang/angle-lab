@@ -18,31 +18,32 @@
   <div id="app">
     <header id="top-bar">
       <label class="bar-button">
-        Library
+        <span data-i18n="libraryButton">Library</span>
         <input id="file-input" type="file" accept="image/*" hidden />
       </label>
       <label class="bar-button">
-        Camera
+        <span data-i18n="cameraButton">Camera</span>
         <input id="camera-input" type="file" accept="image/*" capture="environment" hidden />
       </label>
-      <button id="fit-button" class="bar-button" type="button">Fit to screen</button>
-      <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled>Delete selected</button>
-      <button id="protocol-button" class="bar-button" type="button">Protocol</button>
-      <button id="guide-button" class="bar-button" type="button">Guide</button>
-      <button id="history-button" class="bar-button" type="button">History</button>
-      <button id="export-button" class="bar-button" type="button">Export</button>
-      <button id="new-project-button" class="bar-button" type="button">New project</button>
+      <button id="fit-button" class="bar-button" type="button" data-i18n="fitButton">Fit to screen</button>
+      <button id="delete-selected-button" class="bar-button danger-button" type="button" disabled data-i18n="deleteSelectedButton">Delete selected</button>
+      <button id="protocol-button" class="bar-button" type="button" data-i18n="protocolButton">Protocol</button>
+      <button id="guide-button" class="bar-button" type="button" data-i18n="guideButton">Guide</button>
+      <button id="history-button" class="bar-button" type="button" data-i18n="historyButton">History</button>
+      <button id="export-button" class="bar-button" type="button" data-i18n="exportButton">Export</button>
+      <button id="new-project-button" class="bar-button" type="button" data-i18n="newProjectButton">New project</button>
+      <button id="lang-button" class="bar-button" type="button" data-i18n="langButton">ES</button>
       <div class="readout">
-        <span class="readout-label" id="readout-label">Zoom</span>
+        <span class="readout-label" id="readout-label" data-i18n="wordZoom">Zoom</span>
         <span class="readout-value" id="readout-value">100<span class="readout-unit">%</span></span>
       </div>
     </header>
-    <div id="disclaimer-bar">Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.</div>
+    <div id="disclaimer-bar" data-i18n-html="disclaimerBar">Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.</div>
     <div id="error-bar" role="alert" hidden></div>
     <div id="storage-bar" role="status" hidden></div>
     <div id="return-bar" role="status" hidden>
       <span id="return-bar-text"></span>
-      <button id="return-bar-button" class="bar-button" type="button">Enviar a seco</button>
+      <button id="return-bar-button" class="bar-button" type="button" data-i18n="returnBarButton">Enviar a seco</button>
     </div>
     <main id="canvas-area">
       <canvas id="view"></canvas>
@@ -59,98 +60,98 @@
           <circle cx="60" cy="132" r="6" fill="var(--al-mark)" stroke="none" />
         </svg>
         <h1 class="empty-title">Angle Lab</h1>
-        <p class="empty-body">Open a photo to place points and read angles and distances.</p>
+        <p class="empty-body" data-i18n="emptyBody">Open a photo to place points and read angles and distances.</p>
         <div class="empty-actions">
           <label class="bar-button">
-            Open photo
+            <span data-i18n="openPhotoLabel">Open photo</span>
             <input id="empty-file-input" type="file" accept="image/*" hidden />
           </label>
           <label class="bar-button ghost-button">
-            Take photo
+            <span data-i18n="takePhotoLabel">Take photo</span>
             <input id="empty-camera-input" type="file" accept="image/*" capture="environment" hidden />
           </label>
         </div>
       </div>
     </main>
     <footer id="tool-bar">
-      <div id="tool-group" role="group" aria-label="Tool">
+      <div id="tool-group" role="group" aria-label="Tool" data-i18n-aria="toolGroupLabel">
         <button class="tool-button" data-tool="select" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><path d="M4 3l11 6.5-4.6 1.2L13 16l-2 1-2.6-5.6L4 15z" /></svg>
-          <span class="tool-label">Select</span>
+          <span class="tool-label" data-i18n="toolSelect">Select</span>
         </button>
         <button class="tool-button" data-tool="point" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" /><circle cx="10" cy="10" r="1.6" fill="currentColor" stroke="none" /></svg>
-          <span class="tool-label">Point</span>
+          <span class="tool-label" data-i18n="toolPoint">Point</span>
         </button>
         <button class="tool-button" data-tool="line" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><line x1="3.5" y1="16.5" x2="16.5" y2="3.5" /><circle cx="3.5" cy="16.5" r="1.6" fill="currentColor" stroke="none" /><circle cx="16.5" cy="3.5" r="1.6" fill="currentColor" stroke="none" /></svg>
-          <span class="tool-label">Line</span>
+          <span class="tool-label" data-i18n="toolLine">Line</span>
         </button>
         <button class="tool-button" data-tool="angle" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><path d="M4 16 L4 6 M4 16 L16 16" /><path d="M4 11 A5 5 0 0 1 9 16" /></svg>
-          <span class="tool-label">Angle</span>
+          <span class="tool-label" data-i18n="wordAngle">Angle</span>
         </button>
         <button class="tool-button" data-tool="distance" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><line x1="4" y1="10" x2="16" y2="10" /><line x1="4" y1="6" x2="4" y2="14" /><line x1="16" y1="6" x2="16" y2="14" /></svg>
-          <span class="tool-label">Distance</span>
+          <span class="tool-label" data-i18n="wordDistance">Distance</span>
         </button>
         <button class="tool-button" data-tool="repeat" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><path d="M15 6a6 6 0 1 0 1.5 4" /><path d="M15 2v4h-4" /></svg>
-          <span class="tool-label">Repeat</span>
+          <span class="tool-label" data-i18n="toolRepeat">Repeat</span>
         </button>
       </div>
     </footer>
   </div>
   <dialog id="protocol-dialog">
-    <h2>Capture protocol</h2>
+    <h2 data-i18n="protocolTitle1">Capture protocol</h2>
     <ul>
-      <li>Camera <strong>perpendicular</strong> to the plane of the gesture being measured — a tilted plane biases every angle by up to several degrees and shortens every length.</li>
-      <li>Put the calibration reference <strong>in that same plane</strong>, at the subject's distance from the camera, not closer or farther.</li>
-      <li>Keep a reasonable <strong>minimum distance</strong> from the subject — close-up shots exaggerate perspective error.</li>
-      <li>Avoid the <strong>wide-angle</strong> lens/zoom level — wide angle increases perspective distortion at the frame edges.</li>
+      <li data-i18n-html="protocolBullet1">Camera <strong>perpendicular</strong> to the plane of the gesture being measured — a tilted plane biases every angle by up to several degrees and shortens every length.</li>
+      <li data-i18n-html="protocolBullet2">Put the calibration reference <strong>in that same plane</strong>, at the subject's distance from the camera, not closer or farther.</li>
+      <li data-i18n-html="protocolBullet3">Keep a reasonable <strong>minimum distance</strong> from the subject — close-up shots exaggerate perspective error.</li>
+      <li data-i18n-html="protocolBullet4">Avoid the <strong>wide-angle</strong> lens/zoom level — wide angle increases perspective distortion at the frame edges.</li>
     </ul>
-    <h2>What this measures, and what it doesn't</h2>
-    <p>angle-lab reads a <strong>projected</strong> angle and a <strong>scaled</strong> length off a single 2D photo. It does not reconstruct 3D geometry. Following the protocol above keeps the projection error small; it cannot remove it.</p>
+    <h2 data-i18n="protocolTitle2">What this measures, and what it doesn't</h2>
+    <p data-i18n-html="protocolIntro">angle-lab reads a <strong>projected</strong> angle and a <strong>scaled</strong> length off a single 2D photo. It does not reconstruct 3D geometry. Following the protocol above keeps the projection error small; it cannot remove it.</p>
     <ul>
-      <li><strong>Angles</strong> are immune to distance/scale, but not to the gesture's plane being tilted relative to the camera: roughly up to 8&deg; of error at a 30&deg; tilt.</li>
-      <li><strong>Lengths</strong> need a correct scale (mm/px), which only holds in the plane of the calibration reference — a limb 30&nbsp;cm closer to or farther from the camera than that plane reads 20&ndash;38% off. A tilted (foreshortened) limb reads short: roughly 13% short at a 30&deg; tilt.</li>
-      <li>The on-screen quality colour (green/amber/red) reflects <strong>placement precision</strong> only — how exactly the points were tapped, at what zoom. It does not know about, and cannot warn about, camera tilt or distance.</li>
-      <li>angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
+      <li data-i18n-html="protocolBullet5"><strong>Angles</strong> are immune to distance/scale, but not to the gesture's plane being tilted relative to the camera: roughly up to 8&deg; of error at a 30&deg; tilt.</li>
+      <li data-i18n-html="protocolBullet6"><strong>Lengths</strong> need a correct scale (mm/px), which only holds in the plane of the calibration reference — a limb 30&nbsp;cm closer to or farther from the camera than that plane reads 20&ndash;38% off. A tilted (foreshortened) limb reads short: roughly 13% short at a 30&deg; tilt.</li>
+      <li data-i18n-html="protocolBullet7">The on-screen quality colour (green/amber/red) reflects <strong>placement precision</strong> only — how exactly the points were tapped, at what zoom. It does not know about, and cannot warn about, camera tilt or distance.</li>
+      <li data-i18n-html="protocolBullet8">angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
     </ul>
-    <button id="protocol-close-button" class="bar-button" type="button">Close</button>
+    <button id="protocol-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
   <dialog id="guide-dialog">
-    <h2>Measurement guide</h2>
-    <p class="export-hint">
+    <h2 data-i18n="guideTitle">Measurement guide</h2>
+    <p class="export-hint" data-i18n="guideHint">
       Tap the named landmarks in order on the photo; the angle or distance each one feeds is
       built and tagged for export automatically once every landmark it needs has a point. The
       points themselves stay ordinary points afterwards — draggable in Select, like any other.
     </p>
     <div id="guide-list"></div>
-    <button id="guide-close-button" class="bar-button" type="button">Close</button>
+    <button id="guide-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
   <dialog id="history-dialog">
-    <h2>History</h2>
-    <p class="export-hint">
+    <h2 data-i18n="historyTitle">History</h2>
+    <p class="export-hint" data-i18n="historyHint">
       Every project saved on this device, most recent first. Subject code is editable right here.
       "New project" (top bar) saves the one you're on and starts a blank one — nothing here is ever
       deleted except with the buttons below.
     </p>
     <div id="history-list"></div>
-    <button id="history-delete-all-button" class="bar-button danger-button" type="button">Delete all projects</button>
-    <button id="history-close-button" class="bar-button" type="button">Close</button>
+    <button id="history-delete-all-button" class="bar-button danger-button" type="button" data-i18n="historyDeleteAllButton">Delete all projects</button>
+    <button id="history-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
   <dialog id="export-dialog">
-    <h2>Export</h2>
-    <p class="export-hint">
+    <h2 data-i18n="exportTitle">Export</h2>
+    <p class="export-hint" data-i18n-html="exportHint">
       Fills rows for <code>mediciones-2026-27.csv</code> — the schema, not the file itself: this is
       a static site with no access to your OneDrive, so the CSV lands via Share/Save the same way
       seco's own export already does, and you paste or append it by hand. Only <strong>tagged</strong>
       readings below are exported; anything left "— untagged —" is skipped, not sent as a blank row.
     </p>
     <div class="export-fields">
-      <label>Subject code <input id="export-subject-code" type="text" placeholder="ATL-07" /></label>
-      <label>Category
+      <label><span data-i18n="exportSubjectCodeLabel">Subject code</span> <input id="export-subject-code" type="text" placeholder="ATL-07" /></label>
+      <label><span data-i18n="exportCategoryLabel">Category</span>
         <select id="export-category">
           <option value="">—</option>
           <option value="alevin">Alevín</option>
@@ -158,15 +159,15 @@
           <option value="junior">Junior</option>
         </select>
       </label>
-      <label>Date <input id="export-date" type="date" /></label>
-      <label>Evaluator <input id="export-evaluator" type="text" value="DJ" /></label>
+      <label><span data-i18n="exportDateLabel">Date</span> <input id="export-date" type="date" /></label>
+      <label><span data-i18n="exportEvaluatorLabel">Evaluator</span> <input id="export-evaluator" type="text" value="DJ" /></label>
     </div>
     <div id="export-readings"></div>
     <p id="export-untagged-note" class="export-hint"></p>
     <div class="export-actions">
-      <button id="export-png-button" class="bar-button" type="button">Share photo (PNG)</button>
-      <button id="export-csv-button" class="bar-button" type="button">Share CSV rows</button>
-      <button id="export-close-button" class="bar-button" type="button">Close</button>
+      <button id="export-png-button" class="bar-button" type="button" data-i18n="exportPngButton">Share photo (PNG)</button>
+      <button id="export-csv-button" class="bar-button" type="button" data-i18n="exportCsvButton">Share CSV rows</button>
+      <button id="export-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
     </div>
   </dialog>
   <script type="module" src="src/ui/app.js"></script>
