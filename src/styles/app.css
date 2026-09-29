@@ -323,6 +323,28 @@ html, body {
   color: var(--al-attention);
 }
 
+/* LOTE 5 §4: shown only while this session arrived from dryland-test-logger's "Analizar en
+   angle-lab" bridge (a ?return= URL param) AND the requested test/metric already has a tagged
+   reading on the current photo — the send-back button never appears before there is a real
+   number to send. */
+#return-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--al-space-4);
+  padding: var(--al-space-3) var(--al-space-4);
+  font-size: var(--al-text-sm);
+  line-height: 1.4;
+  border-bottom: var(--al-border);
+  background: color-mix(in srgb, var(--al-ok) 16%, var(--al-bg));
+  color: var(--al-ok);
+}
+
+#return-bar[hidden] {
+  display: none;
+}
+
 /* EMPTY STATE — the first screen anyone sees. */
 .empty {
   position: absolute;

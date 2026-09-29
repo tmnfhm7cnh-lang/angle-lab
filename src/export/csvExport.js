@@ -47,6 +47,41 @@ export function readingsForImage(project, imageId) {
 }
 
 /**
+ * The number+unit a single tagged reading would export as — same rounding and
+ * same "pixels, uncalibrated" fallback buildExportRows uses for its CSV row,
+ * pulled out so LOTE 5 §4's "send to seco" button reads the exact figure the
+ * CSV would have written, never a second computation that could drift from it.
+ * Returns null for an untagged reading or a tag catalogRef.js no longer knows.
+ */
+export function resolveTaggedReading(r) {
+  if (!r.tag) return null;
+  const catalogEntry = findMetric(r.tag.test, r.tag.metric);
+  if (!catalogEntry) return null;
+
+  const isAngle = r.type === 'angle';
+  const calibrated = !isAngle && Number.isFinite(r.real);
+  const value = isAngle ? r.degrees : calibrated ? r.real : r.pixels;
+  const unit = isAngle ? catalogEntry.unit : calibrated ? catalogEntry.unit : 'px';
+  const sigma = isAngle ? r.sigmaDegrees : r.sigma;
+  const decimals = decimalsForSigma(sigma);
+
+  const notes = [];
+  if (!isAngle && !calibrated) notes.push(`sin calibrar: valor en pixeles, no ${catalogEntry.unit}`);
+  if (Number.isFinite(sigma)) {
+    const sigmaUnit = isAngle ? '°' : unit === 'px' ? 'px' : unit;
+    notes.push(`σ≈${sigma.toFixed(decimals > 0 ? decimals : 1)}${sigmaUnit}`);
+  }
+
+  return {
+    test: catalogEntry.test,
+    metric: catalogEntry.metric,
+    value: Number.isFinite(value) ? Number(value.toFixed(decimals)) : '',
+    unit,
+    note: notes.join(' · '),
+  };
+}
+
+/**
  * Rows for the tagged readings only — an untagged one is skipped rather
  * than exported with a blank prueba/metrica, which would look like real
  * data once pasted into the actual CSV. A distance with no calibration for
@@ -56,37 +91,22 @@ export function readingsForImage(project, imageId) {
 export function buildExportRows(readings, { date, subjectCode, category = '', evaluator = 'DJ' } = {}) {
   const rows = [];
   for (const r of readings) {
-    if (!r.tag) continue;
-    const catalogEntry = findMetric(r.tag.test, r.tag.metric);
-    if (!catalogEntry) continue; // a tag pointing at an entry catalogRef.js no longer has
-
-    const isAngle = r.type === 'angle';
-    const calibrated = !isAngle && Number.isFinite(r.real);
-    const value = isAngle ? r.degrees : calibrated ? r.real : r.pixels;
-    const unit = isAngle ? catalogEntry.unit : calibrated ? catalogEntry.unit : 'px';
-    const sigma = isAngle ? r.sigmaDegrees : r.sigma;
-    const decimals = decimalsForSigma(sigma);
-
-    const notes = [];
-    if (!isAngle && !calibrated) notes.push(`sin calibrar: valor en pixeles, no ${catalogEntry.unit}`);
-    if (Number.isFinite(sigma)) {
-      const sigmaUnit = isAngle ? '°' : unit === 'px' ? 'px' : unit;
-      notes.push(`σ≈${sigma.toFixed(decimals > 0 ? decimals : 1)}${sigmaUnit}`);
-    }
+    const resolved = resolveTaggedReading(r);
+    if (!resolved) continue;
 
     rows.push(
       [
         date,
         subjectCode,
         category,
-        catalogEntry.test,
-        catalogEntry.metric,
-        Number.isFinite(value) ? Number(value.toFixed(decimals)) : '',
-        unit,
+        resolved.test,
+        resolved.metric,
+        resolved.value,
+        resolved.unit,
         1,
         '',
         evaluator,
-        notes.join(' · '),
+        resolved.note,
       ]
         .map(csvCell)
         .join(',')

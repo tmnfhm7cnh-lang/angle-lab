@@ -41,7 +41,7 @@ import {
   estimateStorageRatio,
   STORAGE_WARNING_RATIO,
 } from '../storage/db.js';
-import { readingsForImage, buildExportCsv } from '../export/csvExport.js';
+import { readingsForImage, buildExportCsv, resolveTaggedReading } from '../export/csvExport.js';
 import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
 import { resolveAquamadTag } from '../export/batteryTags.js';
 
@@ -80,6 +80,9 @@ const historyList = document.getElementById('history-list');
 const historyDeleteAllButton = document.getElementById('history-delete-all-button');
 const errorBar = document.getElementById('error-bar');
 const storageBar = document.getElementById('storage-bar');
+const returnBar = document.getElementById('return-bar');
+const returnBarText = document.getElementById('return-bar-text');
+const returnBarButton = document.getElementById('return-bar-button');
 const exportButton = document.getElementById('export-button');
 const exportDialog = document.getElementById('export-dialog');
 const exportCloseButton = document.getElementById('export-close-button');
@@ -96,6 +99,28 @@ const exportCsvButton = document.getElementById('export-csv-button');
 // guarantee — no ground truth here, just the physics of a single photo.
 protocolButton.addEventListener('click', () => protocolDialog.showModal());
 protocolCloseButton.addEventListener('click', () => protocolDialog.close());
+
+// LOTE 5 §4: the bridge from dryland-test-logger's "Analizar en angle-lab" button.
+// ?subject=<código>&guide=<guideId>&metric=<planKey>&return=<url volver a seco>. guideId is
+// literally a battery test.id and planKey literally a metric.csv (comprobado contra
+// battery-aquamad.js, no supuesto) — see dryland-test-logger/app.js's angleLabUrl. Read once at
+// boot and the URL cleaned right after, so a reload mid-session never re-triggers it.
+const returnContext = (() => {
+  const params = new URLSearchParams(location.search);
+  const returnUrl = params.get('return');
+  if (!returnUrl) return null;
+  return {
+    subjectCode: params.get('subject') || '',
+    guideId: params.get('guide') || '',
+    metric: params.get('metric') || '',
+    returnUrl,
+  };
+})();
+if (returnContext) {
+  const clean = new URL(location.href);
+  clean.search = '';
+  history.replaceState(null, '', clean.toString());
+}
 
 let image = null;
 let viewport = createViewport();
@@ -345,6 +370,7 @@ function scheduleRender() {
       distances: activeDistances(),
     });
     updateReadout();
+    updateReturnBar();
     deleteButton.disabled = !selectedEntityId;
     emptyState.hidden = !!image;
   });
@@ -457,6 +483,32 @@ function updateGuideReadout() {
   guideReadout.textContent = landmark
     ? `${activeGuide.label}: tap ${landmark.label} (${placedLandmarks.length + 1}/${activeGuide.landmarks.length}).`
     : `${activeGuide.label}: done. Switch to Select to inspect or adjust.`;
+}
+
+// LOTE 5 §4: shows only once the exact (test, metric) dryland-test-logger asked for is a
+// tagged reading on the photo now open — never earlier, and never for a different pair a guide
+// with more than one metric (puente) might also have produced. Clicking it is the one explicit
+// step that actually navigates back — never automatic, so the number gets a look first.
+function updateReturnBar() {
+  if (!returnContext || !image || !project.activeImageId) {
+    returnBar.hidden = true;
+    return;
+  }
+  const match = readingsForImage(project, project.activeImageId)
+    .map(resolveTaggedReading)
+    .find((r) => r && r.test === returnContext.guideId && r.metric === returnContext.metric);
+  if (!match) {
+    returnBar.hidden = true;
+    return;
+  }
+  returnBar.hidden = false;
+  returnBarText.textContent = `${returnContext.subjectCode || 'sin código'} · ${match.test}/${match.metric}: ${match.value} ${match.unit} — listo para enviar a seco`;
+  returnBarButton.onclick = () => {
+    const target = new URL(returnContext.returnUrl);
+    target.searchParams.set('value', match.value);
+    target.searchParams.set('unit', match.unit);
+    location.href = target.toString();
+  };
 }
 
 function renderGuideList() {
@@ -1213,8 +1265,25 @@ async function restoreProject() {
   await loadImageForActiveProject();
 }
 
+// LOTE 5 §4: applied after restoreProject, not before — the incoming subject code and guide
+// are for the project that ends up open (restored or, if none existed, the blank one created at
+// module load), never overwritten a moment later by the restore itself.
+function applyReturnContextOnBoot() {
+  if (!returnContext) return;
+  if (returnContext.subjectCode) {
+    setSubjectCode(project, returnContext.subjectCode);
+    scheduleSave();
+  }
+  const guide = GUIDES.find((g) => g.id === returnContext.guideId);
+  if (guide) setMode('guide', guide);
+  scheduleRender();
+}
+
 requestPersistence();
-restoreProject().then(checkStorageHealth);
+restoreProject().then(() => {
+  applyReturnContextOnBoot();
+  checkStorageHealth();
+});
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch((err) => console.warn('sw', err));
