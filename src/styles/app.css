@@ -679,3 +679,72 @@ html, body {
     scroll-behavior: auto !important;
   }
 }
+
+/* F6: calibration. The panel is anchored to the TOP of the canvas area on purpose — the iOS
+   keyboard shrinks the visual viewport from the bottom, so a bottom-anchored or centred panel
+   would end up behind it with no way to reach Confirm. */
+#calibration-panel {
+  position: absolute;
+  top: var(--al-space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(94%, 460px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--al-space-3);
+  background: var(--al-surface-2);
+  border: var(--al-border);
+  border-radius: var(--al-radius-lg);
+  padding: var(--al-space-4);
+  box-shadow: var(--al-shadow-1);
+  z-index: 20;
+}
+
+#calibration-panel[hidden] {
+  display: none;
+}
+
+.calibration-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--al-space-1);
+  flex: 1 1 140px;
+  font-size: var(--al-text-xs);
+  color: var(--al-ink-muted);
+}
+
+#calibration-panel input,
+#calibration-panel select,
+.bar-select {
+  min-height: var(--al-tap);
+  font-size: 16px; /* >=16px stops iOS Safari zooming the page on focus */
+  color: var(--al-ink);
+  background: var(--al-well);
+  border: var(--al-border);
+  border-radius: var(--al-radius-md);
+  padding: 0 var(--al-space-3);
+}
+
+.bar-select:disabled,
+.bar-button:disabled {
+  opacity: 0.4;
+}
+
+#calibration-error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--al-text-sm);
+  color: var(--al-danger);
+}
+
+#calibration-error[hidden] {
+  display: none;
+}
+
+.scale-readout {
+  font-size: var(--al-text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--al-ink-faint);
+  white-space: nowrap;
+}

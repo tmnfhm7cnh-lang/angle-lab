@@ -13,6 +13,9 @@ import {
   addDistance,
   removeEntity,
   getCalibration,
+  setCalibration,
+  clearCalibration,
+  setDisplayUnit,
   getPoint,
   serialize,
   deserialize,
@@ -100,6 +103,15 @@ const exportUntaggedNote = document.getElementById('export-untagged-note');
 const exportPngButton = document.getElementById('export-png-button');
 const exportCsvButton = document.getElementById('export-csv-button');
 const langButton = document.getElementById('lang-button');
+const displayUnitSelect = document.getElementById('display-unit');
+const clearCalibrationButton = document.getElementById('clear-calibration-button');
+const scaleReadout = document.getElementById('scale-readout');
+const calibrationPanel = document.getElementById('calibration-panel');
+const calibrationLengthInput = document.getElementById('calibration-length');
+const calibrationUnitSelect = document.getElementById('calibration-unit');
+const calibrationError = document.getElementById('calibration-error');
+const calibrationConfirmButton = document.getElementById('calibration-confirm');
+const calibrationCancelButton = document.getElementById('calibration-cancel');
 
 // LOTE 5 §5: fills every [data-i18n]/[data-i18n-html] node from the current language's table —
 // same pattern dryland-test-logger's own applyStrings() already uses (app.js there), kept as a
@@ -358,6 +370,84 @@ async function ensureDetailForZoom() {
   }
 }
 
+function openCalibrationPanel() {
+  calibrationError.hidden = true;
+  calibrationPanel.hidden = false;
+  // Synchronous on purpose: iOS Safari only honours programmatic focus() inside the user-gesture
+  // handler that opened the panel — deferring it to rAF/setTimeout loses the keyboard.
+  calibrationLengthInput.focus();
+}
+
+function closeCalibrationPanel() {
+  calibrationPanel.hidden = true;
+  calibrationError.hidden = true;
+  calibrationLengthInput.value = '';
+  calibrationLengthInput.blur();
+}
+
+function showCalibrationError(key) {
+  calibrationError.textContent = t(key);
+  calibrationError.hidden = false;
+}
+
+function confirmCalibration() {
+  if (pendingPointIds.length !== 2) return;
+  const realLength = Number(calibrationLengthInput.value);
+  if (calibrationLengthInput.value.trim() === '' || !Number.isFinite(realLength) || realLength <= 0) {
+    showCalibrationError('calibrationErrorInvalid');
+    return;
+  }
+  const [aId, bId] = pendingPointIds;
+  if (!getPoint(project, aId) || !getPoint(project, bId)) {
+    // A picked reference point was deleted while the panel was open.
+    pendingPointIds = [];
+    closeCalibrationPanel();
+    scheduleRender();
+    return;
+  }
+  const created = setCalibration(project, {
+    imageId: project.activeImageId,
+    aId,
+    bId,
+    realLength,
+    unit: calibrationUnitSelect.value,
+  });
+  if (!created) {
+    // Input already validated above, so what is left is coincident / too-close reference points.
+    // Keep the pick and the panel open so the length typed is not lost.
+    showCalibrationError('calibrationErrorTooClose');
+    return;
+  }
+  pendingPointIds = [];
+  closeCalibrationPanel();
+  scheduleRender();
+  scheduleSave();
+}
+
+calibrationConfirmButton.addEventListener('click', confirmCalibration);
+calibrationCancelButton.addEventListener('click', () => {
+  pendingPointIds = [];
+  closeCalibrationPanel();
+  scheduleRender();
+});
+calibrationLengthInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    confirmCalibration();
+  }
+});
+displayUnitSelect.addEventListener('change', () => {
+  setDisplayUnit(project, displayUnitSelect.value);
+  scheduleRender();
+  scheduleSave();
+});
+clearCalibrationButton.addEventListener('click', () => {
+  if (!project.activeImageId) return;
+  clearCalibration(project, project.activeImageId);
+  scheduleRender();
+  scheduleSave();
+});
+
 function isMeasurementMode(m) {
   return m === 'line' || m === 'angle' || m === 'distance';
 }
@@ -447,6 +537,44 @@ function updateReadout() {
   }
 }
 
+// F6: the active image's calibration reference as the renderer wants it, or null. Built from the
+// model on every frame (nothing cached), so dragging a reference point moves the dashed line and
+// rescales every real length with no recompute call.
+function calibrationOverlay() {
+  if (!project.activeImageId) return null;
+  const calibration = getCalibration(project, project.activeImageId);
+  if (!calibration) return null;
+  const a = getPoint(project, calibration.aId);
+  const b = getPoint(project, calibration.bId);
+  if (!a || !b) return null;
+  return {
+    a,
+    b,
+    label: t('calibrationRefLabel', { value: `${calibration.realLength} ${calibration.unit}` }),
+  };
+}
+
+// Computed, never stored: the reference points can be dragged and the scale must follow them.
+function currentMmPerPixel() {
+  const calibration = project.activeImageId ? getCalibration(project, project.activeImageId) : null;
+  if (!calibration) return NaN;
+  const a = getPoint(project, calibration.aId);
+  const b = getPoint(project, calibration.bId);
+  if (!a || !b) return NaN;
+  return millimetresPerPixel(calibration.realLength, calibration.unit, Math.hypot(b.x - a.x, b.y - a.y));
+}
+
+function updateCalibrationControls() {
+  const mmPerPixel = currentMmPerPixel();
+  const calibrated = isCalibrated(mmPerPixel);
+  displayUnitSelect.disabled = !calibrated;
+  clearCalibrationButton.disabled = !calibrated;
+  displayUnitSelect.value = project.displayUnit;
+  scaleReadout.textContent = calibrated
+    ? t('scaleValue', { value: mmPerPixel.toFixed(2) })
+    : t('scaleUncalibrated');
+}
+
 function scheduleRender() {
   if (renderScheduled) return;
   renderScheduled = true;
@@ -460,8 +588,10 @@ function scheduleRender() {
       segments: activeSegments(),
       angles: activeAngles(),
       distances: activeDistances(),
+      calibration: calibrationOverlay(),
     });
     updateReadout();
+    updateCalibrationControls();
     updateReturnBar();
     deleteButton.disabled = !selectedEntityId;
     emptyState.hidden = !!image;
@@ -543,6 +673,7 @@ function setMode(nextMode, guide = null) {
   // landmarks stay on the photo as ordinary points; only the "waiting for
   // the next tap" state is abandoned).
   pendingPointIds = [];
+  closeCalibrationPanel();
   repeatTaps = [];
   repeatReadout.hidden = true;
   activeGuide = nextMode === 'guide' ? guide : null;
@@ -656,6 +787,8 @@ deleteButton.addEventListener('click', deleteSelected);
 
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+  // Typing in the calibration length field must never delete the selected point.
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
   if (!selectedEntityId) return;
   event.preventDefault();
   deleteSelected();
@@ -737,7 +870,7 @@ function finishPendingMeasurement() {
 
 // Real-world sigma for the repeatability readout, following the same rule
 // evaluateDistance/evaluateSegment use: pixels if this image has no
-// calibration yet (true for every image today — F6's interface isn't built),
+// calibration yet,
 // the project's display unit once it does.
 function repeatabilityRealSigma(pixelSigma) {
   const calibration = getCalibration(project, project.activeImageId);
@@ -847,6 +980,23 @@ function onPointClaim(viewPoint, event) {
   const toleranceImage = viewToImageLength(TOUCH_RADIUS_CSS_PX, viewport);
   const hit = hitTest(project, imagePoint, toleranceImage, project.activeImageId);
 
+  if (mode === 'calibrate') {
+    // Same picking as DISTANCE (two existing points, in order, same pendingPointIds machinery),
+    // but the second tap opens the length panel instead of creating a measurement; the
+    // calibration is written only when the panel is confirmed. While the panel is open further
+    // taps change nothing — cancel or confirm first.
+    pendingSnapshotBeforeClaim = pendingPointIds.slice();
+    if (pendingPointIds.length === 2) return true;
+    if (hit && hit.type === 'point' && !pendingPointIds.includes(hit.id)) {
+      pendingPointIds.push(hit.id);
+      if (pendingPointIds.length === 2) openCalibrationPanel();
+    } else if (!hit) {
+      pendingPointIds = [];
+    }
+    scheduleRender();
+    return true;
+  }
+
   if (isMeasurementMode(mode)) {
     // LINE/ANGLE/DISTANCE: tap an existing point to add it to the
     // in-progress pick, in order, until enough points exist to create the
@@ -954,6 +1104,7 @@ function onPointDragEnd(point, event) {
       // correct whether the claim only pushed one pending pick or completed
       // the measurement (finishPendingMeasurement reset it to empty).
       pendingPointIds = pendingSnapshotBeforeClaim;
+      if (mode === 'calibrate' && pendingPointIds.length < 2) closeCalibrationPanel();
     }
     scheduleRender();
     if (undidSomething) scheduleSave();
@@ -1010,6 +1161,7 @@ function resetEditingState() {
   selectedEntityId = null;
   selectedEntityType = null;
   pendingPointIds = [];
+  closeCalibrationPanel();
   clearError();
 }
 
@@ -1325,6 +1477,7 @@ exportPngButton.addEventListener('click', async () => {
     segments: activeSegments(),
     angles: activeAngles(),
     distances: activeDistances(),
+    calibration: calibrationOverlay(),
   });
   if (decodedFresh) bitmap.close();
   const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));

@@ -54,6 +54,9 @@ export function renderFrame(ctx, dpr, cssSize, viewport, image, overlay = null) 
   ctx.drawImage(image.displayBitmap, 0, 0, image.imageSize.width, image.imageSize.height);
   ctx.restore();
 
+  if (overlay?.calibration) {
+    drawCalibrationReference(ctx, viewport, overlay.calibration);
+  }
   if (overlay?.segments?.length) {
     drawSegments(ctx, viewport, overlay.segments, overlay.selectedId, overlay.selectedType);
   }
@@ -118,6 +121,33 @@ function drawLabel(ctx, view, text, color = '#fff') {
   ctx.restore();
 }
 
+// F6: the calibration reference — dashed and green so it reads as a reference, not a measurement.
+// The dash is reset afterwards: the canvas context is shared with every other layer.
+const CALIBRATION_COLOR = '#7cff6b';
+
+function drawCalibrationReference(ctx, viewport, calibration) {
+  const from = imageToView(calibration.a, viewport);
+  const to = imageToView(calibration.b, viewport);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.lineWidth = LINE_WIDTH_HALO;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.strokeStyle = CALIBRATION_COLOR;
+  ctx.lineWidth = LINE_WIDTH_STROKE;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  drawLabel(ctx, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - 12 }, calibration.label, CALIBRATION_COLOR);
+}
+
 function drawSegments(ctx, viewport, segments, selectedId, selectedType) {
   for (const segment of segments) {
     const selected = selectedType === 'segment' && segment.id === selectedId;
@@ -138,8 +168,9 @@ function drawDistances(ctx, viewport, distances, selectedId, selectedType) {
     // Decimals come from sigma (LOTE 2 §2.2): a coarse reading no longer
     // prints a false decimal of precision it doesn't have.
     const decimals = decimalsForSigma(dist.sigma);
+    // Calibrated: only the real length — the pixel count is noise next to the number the user asked for.
     const label = Number.isFinite(dist.real)
-      ? `${dist.pixels.toFixed(1)} px (${formatLength(dist.real, dist.unit, decimals)})`
+      ? formatLength(dist.real, dist.unit, decimals)
       : `${dist.pixels.toFixed(1)} px`;
     drawLabel(ctx, { x: mid.x, y: mid.y - 12 }, label, qualityColor(dist.quality));
   }

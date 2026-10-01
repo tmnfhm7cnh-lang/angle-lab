@@ -33,6 +33,14 @@
       <button id="export-button" class="bar-button" type="button" data-i18n="exportButton">Export</button>
       <button id="new-project-button" class="bar-button" type="button" data-i18n="newProjectButton">New project</button>
       <button id="lang-button" class="bar-button" type="button" data-i18n="langButton">ES</button>
+      <select id="display-unit" class="bar-select" disabled data-i18n-aria="displayUnitLabel" aria-label="Display unit">
+        <option value="mm">mm</option>
+        <option value="cm">cm</option>
+        <option value="m">m</option>
+        <option value="in">in</option>
+      </select>
+      <button id="clear-calibration-button" class="bar-button" type="button" disabled data-i18n="clearCalibrationButton">Clear calibration</button>
+      <span id="scale-readout" class="scale-readout" data-i18n="scaleUncalibrated">uncalibrated</span>
       <div class="readout">
         <span class="readout-label" id="readout-label" data-i18n="wordZoom">Zoom</span>
         <span class="readout-value" id="readout-value">100<span class="readout-unit">%</span></span>
@@ -55,6 +63,21 @@
     <main id="canvas-area">
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>
+      <div id="calibration-panel" hidden>
+        <label class="calibration-field">
+          <span data-i18n="calibrationLengthLabel">Reference length</span>
+          <input id="calibration-length" type="number" inputmode="decimal" step="any" min="0" />
+        </label>
+        <select id="calibration-unit" data-i18n-aria="displayUnitLabel" aria-label="Unit">
+          <option value="mm">mm</option>
+          <option value="cm" selected>cm</option>
+          <option value="m">m</option>
+          <option value="in">in</option>
+        </select>
+        <p id="calibration-error" role="alert" hidden></p>
+        <button id="calibration-confirm" class="bar-button" type="button" data-i18n="calibrationConfirm">Calibrate</button>
+        <button id="calibration-cancel" class="bar-button ghost-button" type="button" data-i18n="calibrationCancel">Cancel</button>
+      </div>
       <div id="repeat-readout" hidden></div>
       <div id="guide-readout" hidden></div>
       <div class="empty" id="empty-state">
@@ -101,6 +124,10 @@
         <button class="tool-button" data-tool="distance" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><line x1="4" y1="10" x2="16" y2="10" /><line x1="4" y1="6" x2="4" y2="14" /><line x1="16" y1="6" x2="16" y2="14" /></svg>
           <span class="tool-label" data-i18n="wordDistance">Distance</span>
+        </button>
+        <button class="tool-button" data-tool="calibrate" type="button" aria-pressed="false">
+          <svg viewBox="0 0 20 20"><line x1="3" y1="13" x2="17" y2="13" /><line x1="3" y1="9" x2="3" y2="17" /><line x1="17" y1="9" x2="17" y2="17" /><path d="M7 13v-2M10 13v-3M13 13v-2" /></svg>
+          <span class="tool-label" data-i18n="toolCalibrate">Calibrate</span>
         </button>
         <button class="tool-button" data-tool="repeat" type="button" aria-pressed="false">
           <svg viewBox="0 0 20 20"><path d="M15 6a6 6 0 1 0 1.5 4" /><path d="M15 2v4h-4" /></svg>
