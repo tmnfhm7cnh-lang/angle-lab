@@ -132,3 +132,18 @@ export function clampToBounds(vp, imageSize, viewSize, minVisible = 40) {
 
   return { ...vp, tx: vp.tx + dx, ty: vp.ty + dy };
 }
+
+/**
+ * After the view changes size (device rotation, window resize) keeps the image
+ * point that was at the centre of the view at the centre. Pure translation:
+ * scale and rotation are untouched. An old size with no area (first layout, a
+ * collapsed pane) has no centre worth preserving, so the viewport is returned as is.
+ */
+export function recenterOnResize(vp, oldSize, newSize) {
+  if (!(oldSize.width > 0) || !(oldSize.height > 0)) return { ...vp };
+  return {
+    ...vp,
+    tx: vp.tx + (newSize.width - oldSize.width) / 2,
+    ty: vp.ty + (newSize.height - oldSize.height) / 2,
+  };
+}

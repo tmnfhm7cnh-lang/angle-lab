@@ -1,4 +1,6 @@
-import { createViewport, fitImage, zoomAt, panBy, clampToBounds, viewToImage, viewToImageLength } from '../core/viewport.js';
+import { createViewport, fitImage, zoomAt, panBy, clampToBounds, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
+import { isSafeReturnUrl } from '../core/returnUrl.js';
+import { localDateISO, addDays } from '../core/dates.js';
 import { loadDisplayImage, decodeDisplayBitmap, MAX_DISPLAY_SIDE } from '../render/imageLoader.js';
 import { resizeCanvasBackingStore, renderFrame, renderMagnifierFrame } from '../render/canvasRenderer.js';
 import { attachPointerGestures } from './pointerGestures.js';
@@ -156,6 +158,8 @@ const returnContext = (() => {
   const params = new URLSearchParams(location.search);
   const returnUrl = params.get('return');
   if (!returnUrl) return null;
+  // The value is navigated to from the "Send to seco" button: only same-origin or localhost URLs.
+  if (!isSafeReturnUrl(returnUrl, location.origin)) return null;
   return {
     subjectCode: params.get('subject') || '',
     guideId: params.get('guide') || '',
@@ -246,7 +250,7 @@ async function checkStorageHealth() {
 const SEASON_SNOOZE_KEY = 'angle-lab/seasonPurgeSnoozeUntil';
 
 function seasonEnded() {
-  return todayISO() > AQUAMAD_SEASON_END;
+  return localDateISO() > AQUAMAD_SEASON_END;
 }
 
 function getSeasonSnoozeUntil() {
@@ -268,7 +272,7 @@ function setSeasonSnoozeUntil(dateISO) {
 
 async function checkSeasonBanner() {
   const snoozedUntil = getSeasonSnoozeUntil();
-  if (!seasonEnded() || (snoozedUntil && snoozedUntil >= todayISO())) {
+  if (!seasonEnded() || (snoozedUntil && snoozedUntil >= localDateISO())) {
     seasonBar.hidden = true;
     return;
   }
@@ -291,9 +295,7 @@ seasonPurgeButton.addEventListener('click', async () => {
 });
 
 seasonSnoozeButton.addEventListener('click', () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  setSeasonSnoozeUntil(d.toISOString().slice(0, 10));
+  setSeasonSnoozeUntil(localDateISO(addDays(new Date(), 30)));
   seasonBar.hidden = true;
 });
 
@@ -598,9 +600,17 @@ function scheduleRender() {
   });
 }
 
+// Size the canvas had at the previous resize, so the photo can keep its centre when the size
+// changes (device rotation, window resize). null until the first layout.
+let lastCanvasSize = null;
+
 function resizeCanvas() {
   const size = cssSize();
   dpr = resizeCanvasBackingStore(canvas, size.width, size.height);
+  if (image && lastCanvasSize) {
+    viewport = clampToBounds(recenterOnResize(viewport, lastCanvasSize, size), image.imageSize, size);
+  }
+  lastCanvasSize = size;
   scheduleRender();
 }
 
@@ -636,6 +646,7 @@ async function loadFile(file) {
   scheduleSave();
   saveBlob(imageRef.id, originalBlob).then((ok) => {
     if (ok) checkStorageHealth();
+    else showError(t('photoSaveFailed'));
   });
 }
 
@@ -789,6 +800,12 @@ window.addEventListener('keydown', (event) => {
   if (event.key !== 'Delete' && event.key !== 'Backspace') return;
   // Typing in the calibration length field must never delete the selected point.
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+  // Nor while a dialog is open (the selection behind it is out of reach), nor in a textarea or
+  // any editable element.
+  if (document.querySelector('dialog[open]')) return;
+  for (const el of [event.target, document.activeElement]) {
+    if (el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable)) return;
+  }
   if (!selectedEntityId) return;
   event.preventDefault();
   deleteSelected();
@@ -1300,10 +1317,6 @@ historyDeleteAllButton.addEventListener('click', async () => {
   renderHistoryList();
 });
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 // Same shape as dryland-test-logger/app.js's own shareFile: native share
 // sheet first (so "Save to Files" can drop it straight into the
 // OneDrive-synced folder, the same route seco's CSV already takes), a
@@ -1421,7 +1434,7 @@ function renderExportReadings() {
 
 exportButton.addEventListener('click', () => {
   exportSubjectCodeInput.value = project.subjectCode || '';
-  if (!exportDateInput.value) exportDateInput.value = todayISO();
+  if (!exportDateInput.value) exportDateInput.value = localDateISO();
   renderExportReadings();
   exportDialog.showModal();
 });
@@ -1437,7 +1450,7 @@ exportCsvButton.addEventListener('click', async () => {
   if (!image || !project.activeImageId) return;
   const readings = readingsForImage(project, project.activeImageId);
   const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
-  const date = exportDateInput.value || todayISO();
+  const date = exportDateInput.value || localDateISO();
   const csv = buildExportCsv(readings, {
     date,
     subjectCode,
@@ -1467,6 +1480,9 @@ exportPngButton.addEventListener('click', async () => {
   offscreen.height = Math.max(1, Math.round(image.imageSize.height * exportScale));
   const offCtx = offscreen.getContext('2d');
   const exportViewport = { scale: exportScale, tx: 0, ty: 0, rotation: 0 };
+  // Marks are sized in screen px; on a multi-thousand-px export they would be microscopic, so they
+  // grow with the image (400 px of the shorter side = the on-screen size).
+  const overlayScale = Math.max(1, Math.min(offscreen.width, offscreen.height) / 400);
   renderFrame(offCtx, 1, { width: offscreen.width, height: offscreen.height }, exportViewport, { ...image, displayBitmap: bitmap }, {
     points: activePoints(),
     // No selection ring / pending markers in the exported photo — those are
@@ -1478,11 +1494,17 @@ exportPngButton.addEventListener('click', async () => {
     angles: activeAngles(),
     distances: activeDistances(),
     calibration: calibrationOverlay(),
-  });
+  }, overlayScale);
   if (decodedFresh) bitmap.close();
   const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));
+  // toBlob hands back null when it cannot encode (canvas too large, memory): sharing that would
+  // produce a corrupt file.
+  if (!blob) {
+    showError(t('exportFailed'));
+    return;
+  }
   const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
-  const date = exportDateInput.value || todayISO();
+  const date = exportDateInput.value || localDateISO();
   await shareFile(`${subjectCode}_${date}_angle-lab.png`, blob, 'image/png');
 });
 
@@ -1503,7 +1525,11 @@ async function loadImageForActiveProject() {
   const activeImage = project.images.find((img) => img.id === project.activeImageId);
   if (!activeImage) return;
   const blob = await loadBlob(activeImage.id);
-  if (!blob) return; // project metadata survived; its photo's Blob did not
+  if (!blob) {
+    // project metadata survived; its photo's Blob did not
+    showError(t('photoMissing'));
+    return;
+  }
   try {
     const { displayBitmap, imageSize, originalBlob } = await loadDisplayImage(blob);
     image = { displayBitmap, imageSize, originalBlob };

@@ -123,6 +123,10 @@ const STRINGS = {
     exportReadingAngle: 'Angle · {value} ({quality})',
     exportReadingDistance: 'Distance · {value} ({quality})',
 
+    exportFailed: 'The image could not be exported. Try again, or export a smaller photo.',
+    photoSaveFailed: 'The photo could not be saved on this device. The measurements are kept, but the photo will be lost when you close the app. Free up space (History) and load it again.',
+    photoMissing: 'This project\'s photo is no longer on this device. The points are still here, but you need to load the photo again.',
+
     storageWarning:
       'Device storage is {pct}% full. Open History to delete old projects, or export what you need, before the browser evicts it on its own.',
 
@@ -246,6 +250,10 @@ const STRINGS = {
     exportTaggedCount: '{tagged} de {total} etiquetadas — solo se exportan las etiquetadas.',
     exportReadingAngle: 'Ángulo · {value} ({quality})',
     exportReadingDistance: 'Distancia · {value} ({quality})',
+
+    exportFailed: 'No se ha podido exportar la imagen. Inténtalo de nuevo o exporta una foto más pequeña.',
+    photoSaveFailed: 'No se ha podido guardar la foto en este dispositivo. Las medidas se conservan, pero la foto se perderá al cerrar la app. Libera espacio (Historial) y vuelve a cargarla.',
+    photoMissing: 'La foto de este proyecto ya no está en este dispositivo. Los puntos siguen aquí, pero tienes que volver a cargar la foto.',
 
     storageWarning:
       'El almacenamiento del dispositivo está al {pct}%. Abre Historial para borrar proyectos antiguos, o exporta lo que necesites, antes de que el navegador lo libere por su cuenta.',

@@ -30,7 +30,9 @@ const LINE_WIDTH_HALO = 4;
 const LINE_WIDTH_STROKE = 2;
 const ANGLE_ARC_RADIUS = 28;
 const ANGLE_LABEL_OFFSET = 14;
-const LABEL_FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const LABEL_FONT_PX = 13;
+const LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const LABEL_OFFSET_ABOVE = 12;
 
 export function resizeCanvasBackingStore(canvas, cssWidth, cssHeight) {
   const dpr = window.devicePixelRatio || 1;
@@ -41,7 +43,10 @@ export function resizeCanvasBackingStore(canvas, cssWidth, cssHeight) {
   return dpr;
 }
 
-export function renderFrame(ctx, dpr, cssSize, viewport, image, overlay = null) {
+// overlayScale multiplies EVERY size of the marks (radii, stroke widths, the angle arc, label
+// distance and font size). 1 on screen; the PNG export passes a larger value so the marks stay
+// readable on an image of thousands of pixels. Positions are never scaled, only mark sizes.
+export function renderFrame(ctx, dpr, cssSize, viewport, image, overlay = null, overlayScale = 1) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssSize.width, cssSize.height);
 
@@ -55,16 +60,16 @@ export function renderFrame(ctx, dpr, cssSize, viewport, image, overlay = null) 
   ctx.restore();
 
   if (overlay?.calibration) {
-    drawCalibrationReference(ctx, viewport, overlay.calibration);
+    drawCalibrationReference(ctx, viewport, overlay.calibration, overlayScale);
   }
   if (overlay?.segments?.length) {
-    drawSegments(ctx, viewport, overlay.segments, overlay.selectedId, overlay.selectedType);
+    drawSegments(ctx, viewport, overlay.segments, overlay.selectedId, overlay.selectedType, overlayScale);
   }
   if (overlay?.distances?.length) {
-    drawDistances(ctx, viewport, overlay.distances, overlay.selectedId, overlay.selectedType);
+    drawDistances(ctx, viewport, overlay.distances, overlay.selectedId, overlay.selectedType, overlayScale);
   }
   if (overlay?.angles?.length) {
-    drawAngles(ctx, viewport, overlay.angles, overlay.selectedId, overlay.selectedType);
+    drawAngles(ctx, viewport, overlay.angles, overlay.selectedId, overlay.selectedType, overlayScale);
   }
   if (overlay?.points?.length) {
     drawPoints(
@@ -74,46 +79,47 @@ export function renderFrame(ctx, dpr, cssSize, viewport, image, overlay = null) 
       overlay.selectedId,
       overlay.selectedType,
       overlay.pendingPointIds,
+      overlayScale,
     );
   }
 }
 
-function drawPoints(ctx, viewport, points, selectedId, selectedType, pendingPointIds = []) {
+function drawPoints(ctx, viewport, points, selectedId, selectedType, pendingPointIds = [], k = 1) {
   for (const point of points) {
     const isSelected = selectedType === 'point' && point.id === selectedId;
     const isPending = pendingPointIds.includes(point.id);
-    drawMarker(ctx, imageToView(point, viewport), isSelected, isPending);
+    drawMarker(ctx, imageToView(point, viewport), isSelected, isPending, k);
   }
 }
 
 // Halo-then-stroke line, the same double-draw convention as point markers
 // (spec §4): legible over both a dark swimsuit and bright water. Selected
 // entities get a heavier stroke rather than a different colour.
-function drawHaloLine(ctx, from, to, selected) {
+function drawHaloLine(ctx, from, to, selected, k = 1) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.lineWidth = selected ? LINE_WIDTH_HALO + 2 : LINE_WIDTH_HALO;
+  ctx.lineWidth = (selected ? LINE_WIDTH_HALO + 2 : LINE_WIDTH_HALO) * k;
   ctx.stroke();
 
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
   ctx.strokeStyle = selected ? '#ffd23f' : '#00e5ff';
-  ctx.lineWidth = selected ? LINE_WIDTH_STROKE + 1.5 : LINE_WIDTH_STROKE;
+  ctx.lineWidth = (selected ? LINE_WIDTH_STROKE + 1.5 : LINE_WIDTH_STROKE) * k;
   ctx.stroke();
   ctx.restore();
 }
 
-function drawLabel(ctx, view, text, color = '#fff') {
+function drawLabel(ctx, view, text, color = '#fff', k = 1) {
   ctx.save();
-  ctx.font = LABEL_FONT;
+  ctx.font = `${LABEL_FONT_PX * k}px ${LABEL_FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3 * k;
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.strokeText(text, view.x, view.y);
   ctx.fillStyle = color;
@@ -125,42 +131,42 @@ function drawLabel(ctx, view, text, color = '#fff') {
 // The dash is reset afterwards: the canvas context is shared with every other layer.
 const CALIBRATION_COLOR = '#7cff6b';
 
-function drawCalibrationReference(ctx, viewport, calibration) {
+function drawCalibrationReference(ctx, viewport, calibration, k = 1) {
   const from = imageToView(calibration.a, viewport);
   const to = imageToView(calibration.b, viewport);
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.setLineDash([6, 4]);
+  ctx.setLineDash([6 * k, 4 * k]);
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.lineWidth = LINE_WIDTH_HALO;
+  ctx.lineWidth = LINE_WIDTH_HALO * k;
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
   ctx.lineTo(to.x, to.y);
   ctx.strokeStyle = CALIBRATION_COLOR;
-  ctx.lineWidth = LINE_WIDTH_STROKE;
+  ctx.lineWidth = LINE_WIDTH_STROKE * k;
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
-  drawLabel(ctx, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - 12 }, calibration.label, CALIBRATION_COLOR);
+  drawLabel(ctx, { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - LABEL_OFFSET_ABOVE * k }, calibration.label, CALIBRATION_COLOR, k);
 }
 
-function drawSegments(ctx, viewport, segments, selectedId, selectedType) {
+function drawSegments(ctx, viewport, segments, selectedId, selectedType, k = 1) {
   for (const segment of segments) {
     const selected = selectedType === 'segment' && segment.id === selectedId;
-    drawHaloLine(ctx, imageToView(segment.a, viewport), imageToView(segment.b, viewport), selected);
+    drawHaloLine(ctx, imageToView(segment.a, viewport), imageToView(segment.b, viewport), selected, k);
   }
 }
 
-function drawDistances(ctx, viewport, distances, selectedId, selectedType) {
+function drawDistances(ctx, viewport, distances, selectedId, selectedType, k = 1) {
   for (const dist of distances) {
     const selected = selectedType === 'distance' && dist.id === selectedId;
     const aView = imageToView(dist.a, viewport);
     const bView = imageToView(dist.b, viewport);
-    drawHaloLine(ctx, aView, bView, selected);
+    drawHaloLine(ctx, aView, bView, selected, k);
 
     const mid = { x: (aView.x + bView.x) / 2, y: (aView.y + bView.y) / 2 };
     // Real-world length is NaN until a calibration exists for this image —
@@ -172,7 +178,7 @@ function drawDistances(ctx, viewport, distances, selectedId, selectedType) {
     const label = Number.isFinite(dist.real)
       ? formatLength(dist.real, dist.unit, decimals)
       : `${dist.pixels.toFixed(1)} px`;
-    drawLabel(ctx, { x: mid.x, y: mid.y - 12 }, label, qualityColor(dist.quality));
+    drawLabel(ctx, { x: mid.x, y: mid.y - LABEL_OFFSET_ABOVE * k }, label, qualityColor(dist.quality), k);
   }
 }
 
@@ -186,16 +192,16 @@ function unitVector(v) {
 // signedDegrees decides which way to sweep: view space preserves image
 // space's handedness (pure scale/translate/rotation, no flip), so its sign
 // also tells us the visually-correct sweep direction on screen.
-function drawAngles(ctx, viewport, angles, selectedId, selectedType) {
+function drawAngles(ctx, viewport, angles, selectedId, selectedType, k = 1) {
   for (const angle of angles) {
     const selected = selectedType === 'angle' && angle.id === selectedId;
     const vertexView = imageToView(angle.vertex, viewport);
     const aView = imageToView(angle.a, viewport);
     const cView = imageToView(angle.c, viewport);
 
-    drawHaloLine(ctx, vertexView, aView, selected);
-    drawHaloLine(ctx, vertexView, cView, selected);
-    drawMarker(ctx, vertexView, selected, false);
+    drawHaloLine(ctx, vertexView, aView, selected, k);
+    drawHaloLine(ctx, vertexView, cView, selected, k);
+    drawMarker(ctx, vertexView, selected, false, k);
 
     if (!Number.isNaN(angle.signedDegrees)) {
       const startAngle = Math.atan2(aView.y - vertexView.y, aView.x - vertexView.x);
@@ -204,14 +210,14 @@ function drawAngles(ctx, viewport, angles, selectedId, selectedType) {
 
       ctx.save();
       ctx.beginPath();
-      ctx.arc(vertexView.x, vertexView.y, ANGLE_ARC_RADIUS, startAngle, endAngle, anticlockwise);
+      ctx.arc(vertexView.x, vertexView.y, ANGLE_ARC_RADIUS * k, startAngle, endAngle, anticlockwise);
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-      ctx.lineWidth = selected ? LINE_WIDTH_HALO + 1 : LINE_WIDTH_HALO - 1;
+      ctx.lineWidth = (selected ? LINE_WIDTH_HALO + 1 : LINE_WIDTH_HALO - 1) * k;
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(vertexView.x, vertexView.y, ANGLE_ARC_RADIUS, startAngle, endAngle, anticlockwise);
+      ctx.arc(vertexView.x, vertexView.y, ANGLE_ARC_RADIUS * k, startAngle, endAngle, anticlockwise);
       ctx.strokeStyle = selected ? '#ffd23f' : '#00e5ff';
-      ctx.lineWidth = selected ? LINE_WIDTH_STROKE + 1 : LINE_WIDTH_STROKE - 0.5;
+      ctx.lineWidth = (selected ? LINE_WIDTH_STROKE + 1 : LINE_WIDTH_STROKE - 0.5) * k;
       ctx.stroke();
       ctx.restore();
 
@@ -227,14 +233,14 @@ function drawAngles(ctx, viewport, angles, selectedId, selectedType) {
       }
       bisector = { x: bisector.x / bm, y: bisector.y / bm };
       const labelPos = {
-        x: vertexView.x + bisector.x * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET),
-        y: vertexView.y + bisector.y * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET),
+        x: vertexView.x + bisector.x * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET) * k,
+        y: vertexView.y + bisector.y * (ANGLE_ARC_RADIUS + ANGLE_LABEL_OFFSET) * k,
       };
       // Decimals and colour both come from sigmaDegrees (LOTE 2 §2.2): a
       // reading built from a short ray or a low zoom shows fewer decimals
       // and reads amber/red rather than a falsely precise "127.4°".
       const decimals = decimalsForSigma(angle.sigmaDegrees);
-      drawLabel(ctx, labelPos, formatAngle(angle.degrees, decimals), qualityColor(angle.quality));
+      drawLabel(ctx, labelPos, formatAngle(angle.degrees, decimals), qualityColor(angle.quality), k);
     }
   }
 }
@@ -243,41 +249,41 @@ function drawAngles(ctx, viewport, angles, selectedId, selectedType) {
 // it stays legible over both a dark swimsuit and bright water (spec §4).
 // `isPending` marks a point already picked while building a LINE/ANGLE/
 // DISTANCE measurement, before enough points exist to create it.
-function drawMarker(ctx, view, isSelected, isPending = false) {
+function drawMarker(ctx, view, isSelected, isPending = false, k = 1) {
   ctx.save();
 
   if (isSelected) {
     ctx.beginPath();
-    ctx.arc(view.x, view.y, SELECTED_RING_RADIUS, 0, Math.PI * 2);
+    ctx.arc(view.x, view.y, SELECTED_RING_RADIUS * k, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4 * k;
     ctx.stroke();
     ctx.strokeStyle = '#ffd23f';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * k;
     ctx.stroke();
   } else if (isPending) {
     ctx.beginPath();
-    ctx.arc(view.x, view.y, PENDING_RING_RADIUS, 0, Math.PI * 2);
+    ctx.arc(view.x, view.y, PENDING_RING_RADIUS * k, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4 * k;
     ctx.stroke();
     ctx.strokeStyle = '#7cff6b';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * k;
     ctx.stroke();
   }
 
   ctx.beginPath();
-  ctx.arc(view.x, view.y, POINT_RADIUS, 0, Math.PI * 2);
+  ctx.arc(view.x, view.y, POINT_RADIUS * k, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 4 * k;
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.arc(view.x, view.y, POINT_RADIUS, 0, Math.PI * 2);
+  ctx.arc(view.x, view.y, POINT_RADIUS * k, 0, Math.PI * 2);
   ctx.fillStyle = isSelected ? '#ffd23f' : '#00e5ff';
   ctx.fill();
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = isSelected ? 2 : 1.5;
+  ctx.lineWidth = (isSelected ? 2 : 1.5) * k;
   ctx.stroke();
 
   ctx.restore();

@@ -11,6 +11,7 @@ import {
   panBy,
   clampToBounds,
   sanitizeViewport,
+  recenterOnResize,
 } from '../src/core/viewport.js';
 
 const close = (actual, expected, tolerance = 1e-9) => {
@@ -324,5 +325,45 @@ describe('clampToBounds', () => {
     const clamped = clampToBounds(broken, { width: 1000, height: 500 }, { width: 800, height: 800 });
     assert.ok(Number.isFinite(clamped.scale) && clamped.scale > 0);
     assert.ok(Number.isFinite(clamped.tx) && Number.isFinite(clamped.ty));
+  });
+});
+
+describe('recenterOnResize', () => {
+  test('keeps the image point that was at the centre at the centre after a resize', () => {
+    const vp = createViewport({ scale: 2, tx: 30, ty: -20 });
+    const oldSize = { width: 400, height: 800 };
+    const newSize = { width: 800, height: 400 }; // device rotation
+    const centreBefore = viewToImage({ x: oldSize.width / 2, y: oldSize.height / 2 }, vp);
+    const next = recenterOnResize(vp, oldSize, newSize);
+    const centreAfter = viewToImage({ x: newSize.width / 2, y: newSize.height / 2 }, next);
+    close(centreAfter.x, centreBefore.x);
+    close(centreAfter.y, centreBefore.y);
+  });
+
+  test('moves tx/ty by half the size difference and leaves scale and rotation alone', () => {
+    const vp = createViewport({ scale: 1.5, tx: 10, ty: 20, rotation: 0 });
+    const next = recenterOnResize(vp, { width: 300, height: 600 }, { width: 500, height: 400 });
+    close(next.tx, 10 + 100);
+    close(next.ty, 20 - 100);
+    assert.equal(next.scale, 1.5);
+    assert.equal(next.rotation, 0);
+  });
+
+  test('does not mutate the input viewport', () => {
+    const vp = createViewport({ scale: 1, tx: 5, ty: 5 });
+    recenterOnResize(vp, { width: 100, height: 100 }, { width: 200, height: 200 });
+    assert.equal(vp.tx, 5);
+    assert.equal(vp.ty, 5);
+  });
+
+  test('an identical size is a no-op', () => {
+    const vp = createViewport({ scale: 3, tx: -40, ty: 12 });
+    const next = recenterOnResize(vp, { width: 320, height: 568 }, { width: 320, height: 568 });
+    assert.deepEqual(next, vp);
+  });
+
+  test('a collapsed old size (first layout) leaves the viewport unchanged', () => {
+    const vp = createViewport({ scale: 1, tx: 7, ty: 9 });
+    assert.deepEqual(recenterOnResize(vp, { width: 0, height: 0 }, { width: 400, height: 600 }), vp);
   });
 });
