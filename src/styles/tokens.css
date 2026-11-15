@@ -68,6 +68,8 @@
   --al-space-9: 40px; --al-space-10: 48px;
   --al-tap: 44px;
   --al-tap-comfort: 48px;
+  --al-bar-h: 52px;      /* top bar */
+  --al-toolbar-h: 64px;  /* bottom tool bar, incl. its padding (not the safe-area inset) */
 
   /* ---- radii ---- */
   --al-radius-sm:  6px;

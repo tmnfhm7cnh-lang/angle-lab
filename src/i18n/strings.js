@@ -22,7 +22,7 @@ const STRINGS = {
     fitButton: 'Fit to screen',
     deleteSelectedButton: 'Delete selected',
     protocolButton: 'Protocol',
-    guideButton: 'Guide',
+    guideButton: 'Guides',
     historyButton: 'History',
     exportButton: 'Export',
     newProjectButton: 'New project',
@@ -50,20 +50,19 @@ const STRINGS = {
     qualityPoor: 'poor',
     uncalibratedSuffix: 'uncalibrated',
 
-    disclaimerBar:
-      'Every angle is a <strong>projected</strong> angle — accurate only when the plane of the gesture faces the camera. See Protocol.',
+    disclaimerShort: 'Angles are <strong>projected</strong>: camera perpendicular to the gesture',
 
     emptyBody: 'Open a photo to place points and read angles and distances.',
     openPhotoLabel: 'Open photo',
     takePhotoLabel: 'Take photo',
 
     toolGroupLabel: 'Tool',
-    toolSelect: 'Select',
+    toolSelect: 'Move',
     toolPoint: 'Point',
     toolLine: 'Line',
     toolAngle: 'Angle',
     toolDistance: 'Distance',
-    toolRepeat: 'Repeat',
+    toolRepeat: 'Precision test',
 
     protocolTitle1: 'Capture protocol',
     protocolBullet1:
@@ -106,6 +105,16 @@ const STRINGS = {
     hintCancel: 'Cancel selection',
     undoButton: 'Undo',
     redoButton: 'Redo',
+    hintLineFirst: 'Line · tap the first point (1/2)',
+    hintLineSecond: 'Line · tap the second point (2/2)',
+
+    menuButton: 'Menu',
+    menuSectionPhoto: 'Photo',
+    menuSectionProject: 'Project',
+    menuSectionMeasure: 'Measurement',
+    menuSectionApp: 'App',
+    languageLabel: 'Language',
+    projectChipPhoto: 'photo {n} of {m}',
 
     historyTitle: 'History',
     historyHint:
@@ -164,7 +173,7 @@ const STRINGS = {
     fitButton: 'Ajustar a pantalla',
     deleteSelectedButton: 'Borrar selección',
     protocolButton: 'Protocolo',
-    guideButton: 'Guía',
+    guideButton: 'Guías',
     historyButton: 'Historial',
     exportButton: 'Exportar',
     newProjectButton: 'Nuevo proyecto',
@@ -192,20 +201,19 @@ const STRINGS = {
     qualityPoor: 'malo',
     uncalibratedSuffix: 'sin calibrar',
 
-    disclaimerBar:
-      'Todo ángulo es un ángulo <strong>proyectado</strong> — preciso solo cuando el plano del gesto mira a la cámara. Ver Protocolo.',
+    disclaimerShort: 'Ángulos <strong>proyectados</strong>: cámara perpendicular al gesto',
 
     emptyBody: 'Abre una foto para colocar puntos y leer ángulos y distancias.',
     openPhotoLabel: 'Abrir foto',
     takePhotoLabel: 'Hacer foto',
 
     toolGroupLabel: 'Herramienta',
-    toolSelect: 'Seleccionar',
+    toolSelect: 'Mover',
     toolPoint: 'Punto',
     toolLine: 'Línea',
     toolAngle: 'Ángulo',
     toolDistance: 'Distancia',
-    toolRepeat: 'Repetir',
+    toolRepeat: 'Test de precisión',
 
     protocolTitle1: 'Protocolo de captura',
     protocolBullet1:
@@ -248,6 +256,16 @@ const STRINGS = {
     hintCancel: 'Cancelar selección',
     undoButton: 'Deshacer',
     redoButton: 'Rehacer',
+    hintLineFirst: 'Línea · toca el primer punto (1/2)',
+    hintLineSecond: 'Línea · toca el segundo punto (2/2)',
+
+    menuButton: 'Menú',
+    menuSectionPhoto: 'Foto',
+    menuSectionProject: 'Proyecto',
+    menuSectionMeasure: 'Medición',
+    menuSectionApp: 'App',
+    languageLabel: 'Idioma',
+    projectChipPhoto: 'foto {n} de {m}',
 
     historyTitle: 'Historial',
     historyHint:

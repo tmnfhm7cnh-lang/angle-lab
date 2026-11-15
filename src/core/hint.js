@@ -12,7 +12,7 @@
 const STEPS = {
   angle: ['hintAngleFirst', 'hintAngleVertex', 'hintAngleLast'],
   distance: ['hintPairFirst', 'hintPairSecond'],
-  line: ['hintPairFirst', 'hintPairSecond'],
+  line: ['hintLineFirst', 'hintLineSecond'],
   calibrate: ['hintCalibrateFirst', 'hintCalibrateSecond', 'hintCalibrateLength'],
 };
 

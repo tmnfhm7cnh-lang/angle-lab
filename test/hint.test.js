@@ -14,11 +14,14 @@ describe('describeHint', () => {
     assert.equal(describeHint('angle', 2).key, 'hintAngleLast');
   });
 
-  test('distance and line share the two-step hints', () => {
-    for (const mode of ['distance', 'line']) {
-      assert.equal(describeHint(mode, 0).key, 'hintPairFirst');
-      assert.equal(describeHint(mode, 1).key, 'hintPairSecond');
-    }
+  test('distance has the two-step hints', () => {
+    assert.equal(describeHint('distance', 0).key, 'hintPairFirst');
+    assert.equal(describeHint('distance', 1).key, 'hintPairSecond');
+  });
+
+  test('line names its tool, so the hint says which tool is on when no toolbar cell is lit', () => {
+    assert.equal(describeHint('line', 0).key, 'hintLineFirst');
+    assert.equal(describeHint('line', 1).key, 'hintLineSecond');
   });
 
   test('calibrate asks for two ends, then for the real length', () => {

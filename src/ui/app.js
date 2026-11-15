@@ -1,5 +1,6 @@
 import { createViewport, fitImage, zoomAt, panBy, clampToBounds, clampToImage, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
 import { createHistory } from '../core/history.js';
+import { scaleChipState, projectChipInfo, describeReadout } from '../core/statusDisplay.js';
 import { isSafeReturnUrl } from '../core/returnUrl.js';
 import { describeHint } from '../core/hint.js';
 import { localDateISO, addDays } from '../core/dates.js';
@@ -64,8 +65,20 @@ const cameraInput = document.getElementById('camera-input');
 const fitButton = document.getElementById('fit-button');
 const undoButton = document.getElementById('undo-button');
 const redoButton = document.getElementById('redo-button');
+const readoutElement = document.getElementById('readout');
 const readoutLabel = document.getElementById('readout-label');
 const readoutValue = document.getElementById('readout-value');
+const readoutDot = document.getElementById('readout-dot');
+const readoutMeta = document.getElementById('readout-meta');
+const canvasArea = document.getElementById('canvas-area');
+const selectionBar = document.getElementById('selection-bar');
+const menuButton = document.getElementById('menu-button');
+const menuSheet = document.getElementById('menu-sheet');
+const menuCloseButton = document.getElementById('menu-close-button');
+const projectChip = document.getElementById('project-chip');
+const projectChipCode = document.getElementById('project-chip-code');
+const projectChipPhoto = document.getElementById('project-chip-photo');
+const disclaimerProtocolLink = document.getElementById('disclaimer-protocol-link');
 const emptyState = document.getElementById('empty-state');
 const emptyFileInput = document.getElementById('empty-file-input');
 const emptyCameraInput = document.getElementById('empty-camera-input');
@@ -110,9 +123,12 @@ const exportUntaggedNote = document.getElementById('export-untagged-note');
 const exportPngButton = document.getElementById('export-png-button');
 const exportCsvButton = document.getElementById('export-csv-button');
 const langButton = document.getElementById('lang-button');
-const displayUnitSelect = document.getElementById('display-unit');
+const displayUnitControl = document.getElementById('display-unit');
+const langValue = document.getElementById('lang-value');
 const clearCalibrationButton = document.getElementById('clear-calibration-button');
 const scaleReadout = document.getElementById('scale-readout');
+const scaleDot = document.getElementById('scale-dot');
+const scaleText = document.getElementById('scale-text');
 const calibrationPanel = document.getElementById('calibration-panel');
 const calibrationLengthInput = document.getElementById('calibration-length');
 const calibrationUnitSelect = document.getElementById('calibration-unit');
@@ -130,7 +146,7 @@ function applyStrings() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
   for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
-  langButton.textContent = t('langButton');
+  langValue.textContent = t('langButton');
 }
 
 langButton.addEventListener('click', () => {
@@ -459,8 +475,11 @@ calibrationLengthInput.addEventListener('keydown', (event) => {
     confirmCalibration();
   }
 });
-displayUnitSelect.addEventListener('change', () => {
-  setDisplayUnit(project, displayUnitSelect.value);
+// LOTE 4 §2: the display unit is a segmented control (radio buttons) in the menu sheet.
+displayUnitControl.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-unit]');
+  if (!button || button.disabled) return;
+  setDisplayUnit(project, button.dataset.unit);
   scheduleRender();
   scheduleSave();
 });
@@ -535,30 +554,17 @@ function activeDistances() {
 // selected. Never a live number outside this panel and the canvas label —
 // this just reads what evaluateAngle/evaluateDistance already compute for
 // the export dialog, it does not derive anything new.
+// LOTE 4 §4: the floating readout only exists while an angle or distance is selected (zoom has its
+// own chip now). What it says comes from core/statusDisplay.js; this only writes it.
 function updateReadout() {
   const readings = image && project.activeImageId ? readingsForImage(project, project.activeImageId) : [];
-  const selected = readings.find((r) => r.id === selectedEntityId);
-  if (!selected) {
-    readoutLabel.textContent = t('wordZoom');
-    readoutValue.classList.remove('readout-value--empty');
-    readoutValue.innerHTML = `${Math.round(viewport.scale * 100)}<span class="readout-unit">%</span>`;
-    return;
-  }
-  if (selected.type === 'angle') {
-    const decimals = decimalsForSigma(selected.sigmaDegrees);
-    readoutLabel.textContent = t('wordAngle');
-    readoutValue.classList.remove('readout-value--empty');
-    readoutValue.textContent = formatAngle(selected.degrees, decimals);
-  } else {
-    readoutLabel.textContent = t('wordDistance');
-    readoutValue.classList.remove('readout-value--empty');
-    if (Number.isFinite(selected.real)) {
-      const decimals = decimalsForSigma(selected.sigma);
-      readoutValue.innerHTML = `${formatLength(selected.real, selected.unit, decimals)}`;
-    } else {
-      readoutValue.innerHTML = `${selected.pixels.toFixed(1)}<span class="readout-unit">px</span>`;
-    }
-  }
+  const info = describeReadout(readings.find((r) => r.id === selectedEntityId));
+  readoutElement.hidden = !info;
+  if (!info) return;
+  readoutLabel.textContent = t(info.labelKey);
+  readoutValue.textContent = info.value;
+  readoutDot.dataset.level = info.level;
+  readoutMeta.textContent = [info.sigmaText, t(info.qualityKey)].filter(Boolean).join(' · ');
 }
 
 // F6: the active image's calibration reference as the renderer wants it, or null. Built from the
@@ -591,12 +597,35 @@ function currentMmPerPixel() {
 function updateCalibrationControls() {
   const mmPerPixel = currentMmPerPixel();
   const calibrated = isCalibrated(mmPerPixel);
-  displayUnitSelect.disabled = !calibrated;
   clearCalibrationButton.disabled = !calibrated;
-  displayUnitSelect.value = project.displayUnit;
-  scaleReadout.textContent = calibrated
+  displayUnitControl.classList.toggle('is-disabled', !calibrated);
+  for (const unitButton of displayUnitControl.querySelectorAll('button[data-unit]')) {
+    unitButton.disabled = !calibrated;
+    unitButton.setAttribute('aria-checked', unitButton.dataset.unit === project.displayUnit ? 'true' : 'false');
+  }
+  // LOTE 4 §5: scale chip — the scale, an amber warning only if the photo has a distance and no
+  // scale, nothing otherwise.
+  const chip = scaleChipState({ calibrated, mmPerPixel, hasDistance: activeDistances().length > 0 });
+  scaleReadout.hidden = !image || chip.kind === 'hidden';
+  scaleReadout.classList.toggle('warn', chip.kind === 'uncalibrated');
+  scaleDot.hidden = chip.kind !== 'calibrated';
+  scaleText.textContent = calibrated
     ? t('scaleValue', { value: mmPerPixel.toFixed(2) })
     : t('scaleUncalibrated');
+}
+
+// LOTE 4: the small status layers around the canvas — project chip (top bar), zoom chip, selection
+// bar. Rebuilt every frame from state, like the readout, so none of them can go stale.
+function updateStatusLayers() {
+  const info = projectChipInfo(project);
+  projectChipCode.textContent = info.subjectCode || t('historyCodePlaceholder');
+  projectChipPhoto.textContent =
+    info.photoNumber > 0 ? t('projectChipPhoto', { n: info.photoNumber, m: info.photoCount }) : '';
+  projectChipPhoto.dataset.short = info.photoNumber > 0 ? `${info.photoNumber}/${info.photoCount}` : '';
+  fitButton.hidden = !image;
+  fitButton.textContent = `${Math.round(viewport.scale * 100)} %`;
+  selectionBar.hidden = !selectedEntityId;
+  canvasArea.classList.toggle('has-selection', !!selectedEntityId);
 }
 
 function scheduleRender() {
@@ -618,6 +647,7 @@ function scheduleRender() {
     updateCalibrationControls();
     updateReturnBar();
     updateHint();
+    updateStatusLayers();
     deleteButton.disabled = !selectedEntityId;
     undoButton.disabled = !editHistory.canUndo;
     redoButton.disabled = !editHistory.canRedo;
@@ -717,11 +747,15 @@ function setMode(nextMode, guide = null) {
   placedLandmarks = [];
   justCreatedGuideMeasurementIds = [];
   updateHint();
+  // line and repeat live in the menu, so with either active no toolbar cell is lit; the hint names
+  // the tool instead. The Guides cell is lit while a guide is running.
   for (const button of toolButtons) {
     const isActive = button.dataset.tool === mode;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   }
+  guideButton.classList.toggle('active', mode === 'guide');
+  guideButton.setAttribute('aria-pressed', mode === 'guide' ? 'true' : 'false');
   scheduleRender();
 }
 
@@ -756,6 +790,8 @@ function updateHint() {
     } else if (mode === 'repeat') {
       const message = repeatHint || { key: 'repeatTapMoreMany', params: { n: REPEATABILITY_TAP_COUNT } };
       text = t(message.key, message.params);
+      // The tool has no toolbar cell, so the tap prompts name it (the result line is long enough).
+      if (message.key !== 'repeatResult') text = `${t('toolRepeat')} · ${text}`;
     } else {
       const hint = describeHint(mode, pendingPointIds.length);
       if (hint) {
@@ -834,6 +870,33 @@ guideButton.addEventListener('click', () => {
   guideDialog.showModal();
 });
 guideCloseButton.addEventListener('click', () => guideDialog.close());
+
+// LOTE 4 §1-2: menu sheet. The menu button and the project chip open it; ✕, a tap on the backdrop
+// and Escape (native) close it. A row marked data-closes-menu closes it BEFORE its own handler runs
+// (capture), so a dialog opened by that row is not stacked on top of the sheet. Rows with
+// data-menu-tool switch to that tool. The photo inputs close it once a file is actually chosen.
+function openMenu() {
+  menuSheet.showModal();
+}
+menuButton.addEventListener('click', openMenu);
+projectChip.addEventListener('click', openMenu);
+menuCloseButton.addEventListener('click', () => menuSheet.close());
+menuSheet.addEventListener('click', (event) => {
+  if (event.target === menuSheet) menuSheet.close();
+});
+menuSheet.addEventListener(
+  'click',
+  (event) => {
+    if (event.target.closest('[data-closes-menu]')) menuSheet.close();
+  },
+  true,
+);
+menuSheet.addEventListener('click', (event) => {
+  const toolRow = event.target.closest('[data-menu-tool]');
+  if (toolRow) setMode(toolRow.dataset.menuTool);
+});
+for (const input of [fileInput, cameraInput]) input.addEventListener('change', () => menuSheet.close());
+disclaimerProtocolLink.addEventListener('click', () => protocolDialog.showModal());
 
 function deleteSelected() {
   if (!selectedEntityId) return;

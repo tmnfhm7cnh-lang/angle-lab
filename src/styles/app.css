@@ -21,24 +21,11 @@ html, body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: var(--al-space-3);
-  padding: var(--al-space-3) var(--al-space-4);
-  padding-top: calc(var(--al-space-3) + env(safe-area-inset-top));
+  gap: 6px;
+  height: calc(var(--al-bar-h) + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
   background: var(--al-surface-1);
   border-bottom: var(--al-border);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.04);
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-#top-bar::-webkit-scrollbar {
-  display: none;
-}
-
-#top-bar > * {
-  flex-shrink: 0;
 }
 
 .bar-button {
@@ -61,21 +48,84 @@ html, body {
               transform var(--al-dur-instant) var(--al-ease-standard);
 }
 
-/* Icon-only bar button (undo/redo): a 44x44 square, the label lives in aria-label. */
+/* Icon-only button: a 44x44 target, the label lives in aria-label. */
 .icon-button {
+  flex: none;
   width: var(--al-tap);
+  height: var(--al-tap);
+  display: grid;
+  place-items: center;
   padding: 0;
-  justify-content: center;
+  border: 0;
+  border-radius: var(--al-radius-md);
+  background: transparent;
+  color: var(--al-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .icon-button svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.icon-button:active {
+  background: var(--al-surface-3);
+}
+
+.icon-button:disabled {
+  color: var(--al-ink-faint);
+  opacity: .5;
+  cursor: default;
+}
+
+.primary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--al-ink);
+  color: var(--al-ink-inverse);
+}
+
+.primary-icon:active {
+  background: var(--al-ink);
+  opacity: .8;
+}
+
+.project-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--al-well);
+  border: var(--al-border);
+  border-radius: var(--al-radius-pill);
+  color: var(--al-ink);
+  font: var(--al-weight-semi) 14px/1 var(--al-font-ui);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.project-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-chip small {
+  flex: none;
+  color: var(--al-ink-faint);
+  font-weight: var(--al-weight-medium);
+  font-size: 12px;
 }
 
 .bar-button:active {
@@ -89,95 +139,92 @@ html, body {
   box-shadow: none;
 }
 
+/* LOTE 4 §4: floating reading of the selected measurement, top-left of the canvas. The plaque
+   is dark in both themes, so its text is light in both. Hidden when nothing is selected. */
 .readout {
-  margin-left: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 96px;
-  padding: 0 var(--al-space-2);
+  position: absolute;
+  top: 10px;
+  left: calc(10px + env(safe-area-inset-left));
+  z-index: 10;
+  padding: 8px 12px 9px;
+  background: var(--al-plaque);
+  border: 1px solid var(--al-plaque-edge);
+  border-radius: var(--al-radius-lg);
+  color: #E9EDF3;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.readout[hidden] {
+  display: none;
 }
 
 .readout-label {
-  font: var(--al-weight-semi) var(--al-text-2xs)/var(--al-lh-2xs) var(--al-font-ui);
+  font: var(--al-weight-semi) 11px/1.2 var(--al-font-ui);
+  letter-spacing: .08em;
   text-transform: uppercase;
-  letter-spacing: var(--al-track-caps);
-  color: var(--al-ink-faint);
+  color: #9AA6B4;
 }
 
 .readout-value {
-  font: var(--al-weight-semi) var(--al-text-2xl)/var(--al-lh-2xl) var(--al-font-num);
+  font: var(--al-weight-semi) 34px/36px var(--al-font-num);
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
   letter-spacing: var(--al-track-tight);
-  color: var(--al-ink);
-  transition: none;
 }
 
-.readout-value--empty {
-  color: var(--al-ink-faint);
-}
-
-.readout-unit {
-  font-size: 0.56em;
-  color: var(--al-ink-muted);
-  margin-left: 0.16em;
-  font-weight: var(--al-weight-medium);
-}
-
-.zoom-readout {
-  font-size: var(--al-text-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--al-ink-faint);
-  padding: 0 var(--al-space-2);
-}
-
-/* BOTTOM TOOL BAR — the tool switcher, moved to thumb reach. */
-#tool-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
+.readout-meta {
   display: flex;
-  justify-content: center;
-  padding: var(--al-space-3) var(--al-space-4);
-  padding-bottom: calc(var(--al-space-3) + env(safe-area-inset-bottom));
+  align-items: center;
+  gap: 6px;
+  font: var(--al-weight-medium) 12px/16px var(--al-font-num);
+  color: #9AA6B4;
+}
+
+.quality-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Same three colours the canvas labels use for quality (canvasRenderer.js QUALITY_COLOR). */
+.quality-dot[data-level="good"] { background: #7cff6b; }
+.quality-dot[data-level="ok"] { background: #ffd23f; }
+.quality-dot[data-level="poor"] { background: #ff5f5f; }
+
+/* BOTTOM TOOL BAR — six equal cells at thumb reach, in the page flow so the canvas ends where it
+   begins (no fixed overlay, no padding hack on #canvas-area). */
+#tool-bar {
+  flex: 0 0 auto;
+  padding: 6px calc(6px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
   background: var(--al-surface-1);
   border-top: var(--al-border);
-  box-shadow: 0 -1px 0 rgba(255,255,255,0.04);
-}
-
-#canvas-area {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 
 #tool-group {
-  display: inline-flex;
-  gap: var(--al-space-1);
-  padding: var(--al-space-1);
-  background: var(--al-well);
-  border: var(--al-border);
-  border-radius: var(--al-radius-md);
-  box-shadow: var(--al-shadow-inset);
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  height: calc(var(--al-toolbar-h) - 14px);
 }
 
 .tool-button {
   appearance: none;
+  min-width: 0;
+  min-height: var(--al-tap);
+  padding: 0 2px;
   border: 0;
+  border-radius: var(--al-radius-md);
   background: transparent;
   color: var(--al-ink-muted);
-  font: var(--al-weight-medium) var(--al-text-sm)/1 var(--al-font-ui);
-  min-height: calc(var(--al-tap) - 6px);
-  min-width: var(--al-tap);
-  padding: 0 var(--al-space-3);
-  border-radius: var(--al-radius-sm);
-  display: inline-flex;
+  font: var(--al-weight-medium) 10.5px/1 var(--al-font-ui);
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -186,22 +233,26 @@ html, body {
 }
 
 .tool-button svg {
-  width: 18px;
-  height: 18px;
+  flex: none;
+  width: 22px;
+  height: 22px;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   fill: none;
 }
 
 .tool-button .tool-label {
-  font-size: 10px;
-  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-button.active {
   background: var(--al-ink);
   color: var(--al-ink-inverse);
-  box-shadow: var(--al-shadow-1);
 }
 
 .tool-button:active:not(.active) {
@@ -263,11 +314,49 @@ html, body {
    toast — it is not allowed to become something the user stops seeing. */
 #disclaimer-bar {
   flex: 0 0 auto;
-  padding: var(--al-space-2) var(--al-space-4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));
   font-size: var(--al-text-xs);
   color: var(--al-ink-muted);
   background: var(--al-surface-1);
   border-bottom: var(--al-border);
+}
+
+#disclaimer-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#disclaimer-text strong {
+  color: var(--al-ink);
+  font-weight: var(--al-weight-semi);
+}
+
+.link-button {
+  position: relative;
+  flex: none;
+  appearance: none;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--al-ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Invisible 44px-high hit area around the 12px text link. */
+.link-button::after {
+  content: "";
+  position: absolute;
+  inset: -8px -6px;
 }
 
 /* LOTE 2 §3: the single hint line that says what the next tap does (replaces #repeat-readout and
@@ -276,12 +365,14 @@ html, body {
 #hint {
   position: absolute;
   left: 50%;
-  bottom: calc(64px + env(safe-area-inset-bottom) + var(--al-space-4));
+  bottom: var(--al-space-4);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: var(--al-space-3);
-  max-width: min(90%, 420px);
+  /* left:50% leaves a shrink-to-fit width of half the canvas; max-content lets it use the room. */
+  width: max-content;
+  max-width: min(90%, 560px);
   background: var(--al-plaque);
   border: var(--al-border);
   border-radius: var(--al-radius-lg);
@@ -771,9 +862,306 @@ html, body {
   display: none;
 }
 
-.scale-readout {
-  font-size: var(--al-text-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--al-ink-faint);
+/* ---- LOTE 4: status chips, selection bar, menu sheet ---- */
+
+.status-chips {
+  position: absolute;
+  top: 10px;
+  right: calc(10px + env(safe-area-inset-right));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.chip {
+  position: relative;
+  height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--al-plaque);
+  border: 1px solid var(--al-plaque-edge);
+  border-radius: var(--al-radius-pill);
+  color: #E9EDF3;
+  font: var(--al-weight-medium) 12px/1 var(--al-font-num);
   white-space: nowrap;
+}
+
+.chip[hidden] {
+  display: none;
+}
+
+button.chip {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The zoom chip is a button: give it a 44px-high hit area. */
+button.chip::after {
+  content: "";
+  position: absolute;
+  inset: -9px -6px;
+}
+
+.chip-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7cff6b;
+}
+
+.chip.warn {
+  color: #FFB020;
+  border-color: rgba(255, 176, 32, .45);
+}
+
+.selection-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 16;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: var(--al-surface-2);
+  border: var(--al-border-strong);
+  border-radius: var(--al-radius-pill);
+  box-shadow: var(--al-shadow-2);
+}
+
+.selection-bar[hidden] {
+  display: none;
+}
+
+.selection-bar button {
+  white-space: nowrap;
+  min-height: var(--al-tap);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--al-radius-pill);
+  background: transparent;
+  color: var(--al-ink);
+  font: var(--al-weight-semi) 13px var(--al-font-ui);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.selection-bar button.danger {
+  color: var(--al-danger);
+}
+
+.selection-bar button:disabled {
+  opacity: .4;
+}
+
+.selection-bar svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* With a selection the hint rides above the selection bar instead of under it. */
+#canvas-area.has-selection #hint {
+  bottom: 74px;
+}
+
+/* Menu sheet: anchored to the bottom, centred and capped on wide screens. */
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 560px;
+  max-height: 86dvh;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-top: var(--al-border-strong);
+  border-radius: var(--al-radius-xl) var(--al-radius-xl) 0 0;
+  background: var(--al-surface-2);
+  color: var(--al-ink);
+  box-shadow: var(--al-shadow-3);
+}
+
+.sheet::backdrop {
+  background: rgba(5, 7, 10, .6);
+}
+
+.sheet-body {
+  padding: 8px calc(14px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+}
+
+.sheet-head {
+  position: relative;
+  height: 44px;
+}
+
+.grabber {
+  width: 38px;
+  height: 4px;
+  margin: 4px auto 0;
+  border-radius: 2px;
+  background: var(--al-line-strong);
+}
+
+.sheet-head .icon-button {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+}
+
+.sheet h2 {
+  margin: 10px 2px 8px;
+  font: var(--al-weight-semi) 11px/1.2 var(--al-font-ui);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--al-ink-faint);
+}
+
+.rows {
+  overflow: hidden;
+  background: var(--al-surface-1);
+  border: var(--al-border);
+  border-radius: var(--al-radius-lg);
+}
+
+.row {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-top: var(--al-border);
+  background: transparent;
+  color: var(--al-ink);
+  font: 15px/1.2 var(--al-font-ui);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rows > :first-child {
+  border-top: 0;
+}
+
+.row:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.row:active:not(:disabled) {
+  background: var(--al-surface-3);
+}
+
+.row svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--al-ink-muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.row .value {
+  margin-left: auto;
+  color: var(--al-ink-muted);
+  font-size: 14px;
+}
+
+.seg {
+  margin-left: auto;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--al-well);
+  border: var(--al-border);
+  border-radius: var(--al-radius-md);
+}
+
+.seg button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--al-radius-sm);
+  background: transparent;
+  color: var(--al-ink-muted);
+  font: var(--al-weight-medium) 13px var(--al-font-num);
+  cursor: pointer;
+}
+
+.seg button[aria-checked="true"] {
+  background: var(--al-ink);
+  color: var(--al-ink-inverse);
+}
+
+.seg.is-disabled button {
+  opacity: .4;
+  cursor: default;
+}
+
+/* Short landscape phone: a slimmer top bar, tool cells side by side (icon + label), a smaller
+   readout, so the chrome leaves most of the height to the photo. */
+@media (max-height: 480px) {
+  #top-bar {
+    height: calc(48px + env(safe-area-inset-top));
+  }
+
+  #tool-bar {
+    padding-top: 3px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  }
+
+  #tool-group {
+    height: var(--al-tap);
+  }
+
+  .tool-button {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .readout {
+    padding: 6px 10px 7px;
+  }
+
+  .readout-value {
+    font-size: 26px;
+    line-height: 28px;
+  }
+}
+
+/* Narrow phone (320 px): the project chip keeps the code and shows the photo position as n/m. */
+@media (max-width: 360px) {
+  .project-chip {
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .project-chip small {
+    font-size: 0;
+  }
+
+  .project-chip small::after {
+    content: attr(data-short);
+    font-size: 12px;
+  }
 }
