@@ -253,47 +253,59 @@ html, body {
   border-bottom: var(--al-border);
 }
 
-#repeat-readout {
+/* LOTE 2 §3: the single hint line that says what the next tap does (replaces #repeat-readout and
+   #guide-readout, same plaque). The text ignores pointer events so it never eats a tap meant for
+   the photo; only the ✕ (44x44) takes them. */
+#hint {
   position: absolute;
   left: 50%;
   bottom: calc(64px + env(safe-area-inset-bottom) + var(--al-space-4));
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--al-space-3);
   max-width: min(90%, 420px);
   background: var(--al-plaque);
   border: var(--al-border);
   border-radius: var(--al-radius-lg);
   padding: var(--al-space-4) var(--al-space-5);
+  /* --al-plaque is dark in both themes, so the text must be light in both (--al-ink flips to dark in the light theme). */
+  color: #E9EDF3;
   font-size: var(--al-text-sm);
   line-height: 1.5;
   text-align: center;
   z-index: 15;
+  pointer-events: none;
 }
 
-#repeat-readout[hidden] {
+#hint[hidden] {
   display: none;
 }
 
-/* Same plaque as #repeat-readout — the two never show at once (a mode is
-   either 'repeat' or 'guide', never both), so they can share the recipe
-   without sharing an id. */
-#guide-readout {
-  position: absolute;
-  left: 50%;
-  bottom: calc(64px + env(safe-area-inset-bottom) + var(--al-space-4));
-  transform: translateX(-50%);
-  max-width: min(90%, 420px);
-  background: var(--al-plaque);
-  border: var(--al-border);
-  border-radius: var(--al-radius-lg);
-  padding: var(--al-space-4) var(--al-space-5);
-  font-size: var(--al-text-sm);
-  line-height: 1.5;
-  text-align: center;
-  z-index: 15;
+#hint-cancel {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: calc(-1 * var(--al-space-3)) calc(-1 * var(--al-space-3)) calc(-1 * var(--al-space-3)) 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
-#guide-readout[hidden] {
+#hint-cancel[hidden] {
   display: none;
+}
+
+#hint-cancel:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }
 
 /* LOTE 3: image-decode failures (§7) and storage-quota warnings (§3) both

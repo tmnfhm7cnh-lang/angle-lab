@@ -1,5 +1,6 @@
 import { createViewport, fitImage, zoomAt, panBy, clampToBounds, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
 import { isSafeReturnUrl } from '../core/returnUrl.js';
+import { describeHint } from '../core/hint.js';
 import { localDateISO, addDays } from '../core/dates.js';
 import { loadDisplayImage, decodeDisplayBitmap, MAX_DISPLAY_SIDE } from '../render/imageLoader.js';
 import { resizeCanvasBackingStore, renderFrame, renderMagnifierFrame } from '../render/canvasRenderer.js';
@@ -69,8 +70,9 @@ const toolButtons = Array.from(document.querySelectorAll('.tool-button[data-tool
 const deleteButton = document.getElementById('delete-selected-button');
 const magnifierCanvas = document.getElementById('magnifier');
 const magnifierCtx = magnifierCanvas.getContext('2d');
-const repeatReadout = document.getElementById('repeat-readout');
-const guideReadout = document.getElementById('guide-readout');
+const hintElement = document.getElementById('hint');
+const hintText = document.getElementById('hint-text');
+const hintCancelButton = document.getElementById('hint-cancel');
 const guideButton = document.getElementById('guide-button');
 const guideDialog = document.getElementById('guide-dialog');
 const guideCloseButton = document.getElementById('guide-close-button');
@@ -135,7 +137,7 @@ langButton.addEventListener('click', () => {
   // history list, return-bar) is rebuilt by the same functions that already run on every
   // render/dialog-open — re-triggering them here keeps the switch instant instead of waiting for
   // the next unrelated state change to happen to repaint them.
-  updateGuideReadout();
+  updateHint();
   scheduleRender();
   if (exportDialog.open) renderExportReadings();
   if (historyDialog.open) renderHistoryList();
@@ -209,6 +211,9 @@ let justCreatedMeasurementId = null;
 // re-found, so there is nothing here for undo-on-cancel to protect.
 let repeatTaps = [];
 const REPEATABILITY_TAP_COUNT = 3;
+// What #hint shows in repeat mode once a tap has happened: { key, params }, translated at
+// display time so a language switch re-translates it. null = nothing tapped yet.
+let repeatHint = null;
 
 // LOTE 5 §2: a measurement guide walks named landmarks in order — see
 // core/guides.js's module doc. activeGuide is the guide picked from
@@ -595,6 +600,7 @@ function scheduleRender() {
     updateReadout();
     updateCalibrationControls();
     updateReturnBar();
+    updateHint();
     deleteButton.disabled = !selectedEntityId;
     emptyState.hidden = !!image;
   });
@@ -686,11 +692,11 @@ function setMode(nextMode, guide = null) {
   pendingPointIds = [];
   closeCalibrationPanel();
   repeatTaps = [];
-  repeatReadout.hidden = true;
+  repeatHint = null;
   activeGuide = nextMode === 'guide' ? guide : null;
   placedLandmarks = [];
   justCreatedGuideMeasurementIds = [];
-  updateGuideReadout();
+  updateHint();
   for (const button of toolButtons) {
     const isActive = button.dataset.tool === mode;
     button.classList.toggle('active', isActive);
@@ -704,25 +710,52 @@ for (const button of toolButtons) {
 }
 setMode(mode);
 
-// LOTE 5 §2: shows which landmark a guide is waiting for next, or that it is
-// done — the guided-placement equivalent of #repeat-readout's tap counter.
-function updateGuideReadout() {
-  if (mode !== 'guide' || !activeGuide) {
-    guideReadout.hidden = true;
-    return;
+// LOTE 2 §3: the one hint line (#hint) that always says what the next tap does. The text for
+// select/point/line/angle/distance/calibrate comes from core/hint.js; guide mode shows which
+// landmark it waits for (LOTE 5 §2) and repeat mode its tap counter / result, as before.
+// Called from setMode, every tap, language switches and every render frame, so it cannot
+// disagree with pendingPointIds. The ✕ only shows while a LINE/ANGLE/DISTANCE/calibrate
+// pick is in progress.
+function updateHint() {
+  let text = null;
+  let cancellable = false;
+  if (image) {
+    if (mode === 'guide') {
+      if (activeGuide) {
+        const placedIds = placedLandmarks.map((p) => p.landmarkId);
+        const landmark = nextLandmark(activeGuide, placedIds);
+        text = landmark
+          ? t('guideReadoutWaiting', {
+              guide: activeGuide.label,
+              landmark: landmark.label,
+              n: placedLandmarks.length + 1,
+              total: activeGuide.landmarks.length,
+            })
+          : t('guideReadoutDone', { guide: activeGuide.label });
+      }
+    } else if (mode === 'repeat') {
+      const message = repeatHint || { key: 'repeatTapMoreMany', params: { n: REPEATABILITY_TAP_COUNT } };
+      text = t(message.key, message.params);
+    } else {
+      const hint = describeHint(mode, pendingPointIds.length);
+      if (hint) {
+        text = t(hint.key, hint.params);
+        cancellable = hint.cancellable;
+      }
+    }
   }
-  const placedIds = placedLandmarks.map((p) => p.landmarkId);
-  const landmark = nextLandmark(activeGuide, placedIds);
-  guideReadout.hidden = false;
-  guideReadout.textContent = landmark
-    ? t('guideReadoutWaiting', {
-        guide: activeGuide.label,
-        landmark: landmark.label,
-        n: placedLandmarks.length + 1,
-        total: activeGuide.landmarks.length,
-      })
-    : t('guideReadoutDone', { guide: activeGuide.label });
+  hintElement.hidden = text === null;
+  hintText.textContent = text === null ? '' : text;
+  hintCancelButton.hidden = !cancellable;
 }
+
+// Abandons the in-progress pick only. The points it already created stay on the photo.
+hintCancelButton.addEventListener('click', () => {
+  pendingPointIds = [];
+  closeCalibrationPanel();
+  updateHint();
+  scheduleRender();
+});
 
 // LOTE 5 §4: shows only once the exact (test, metric) dryland-test-logger asked for is a
 // tagged reading on the photo now open — never earlier, and never for a different pair a guide
@@ -913,21 +946,50 @@ function handleRepeatabilityTap(imagePoint) {
   repeatTaps.push(imagePoint);
   if (repeatTaps.length < REPEATABILITY_TAP_COUNT) {
     const remaining = REPEATABILITY_TAP_COUNT - repeatTaps.length;
-    repeatReadout.hidden = false;
-    repeatReadout.textContent = t(remaining === 1 ? 'repeatTapMoreOne' : 'repeatTapMoreMany', { n: remaining });
+    repeatHint = { key: remaining === 1 ? 'repeatTapMoreOne' : 'repeatTapMoreMany', params: { n: remaining } };
     return;
   }
   const stats = repeatabilityStats(repeatTaps);
   const realSigma = repeatabilityRealSigma(stats.rmsPx);
   const realText = realSigma !== null ? ` (${formatLength(realSigma, project.displayUnit, 2)})` : '';
-  repeatReadout.hidden = false;
-  repeatReadout.textContent = t('repeatResult', {
-    rms: stats.rmsPx.toFixed(1),
-    realText,
-    max: stats.maxDeviationPx.toFixed(1),
-    count: REPEATABILITY_TAP_COUNT,
-  });
+  repeatHint = {
+    key: 'repeatResult',
+    params: {
+      rms: stats.rmsPx.toFixed(1),
+      realText,
+      max: stats.maxDeviationPx.toFixed(1),
+      count: REPEATABILITY_TAP_COUNT,
+    },
+  };
   repeatTaps = [];
+}
+
+// LOTE 2 §2: a tap that creates a point also starts a drag on it, so the finger can slide to
+// fine-tune before lifting, under the magnifier. onPointDragMove already moves draggingPointId
+// and onPointDragEnd clears all of this (and removes the point if a second finger cancels).
+function startPlacementDrag(created, viewPoint, imagePoint, event) {
+  justCreatedPointId = created.id;
+  draggingPointId = created.id;
+  magnifierPointerType = event.pointerType;
+  if (event.pointerType !== 'pen') showMagnifierAt(viewPoint, imagePoint);
+}
+
+// LOTE 2 §1: the id a LINE/ANGLE/DISTANCE/calibrate tap contributes to the in-progress pick.
+// A tap on an existing point reuses it (null if it is already in the pick); a tap anywhere else
+// creates a point there, exactly like POINT mode.
+function pickOrCreatePoint(hit, viewPoint, imagePoint, event) {
+  if (hit && hit.type === 'point') {
+    return pendingPointIds.includes(hit.id) ? null : hit.id;
+  }
+  const created = addPoint(project, {
+    imageId: project.activeImageId,
+    x: imagePoint.x,
+    y: imagePoint.y,
+    placementScale: viewport.scale,
+  });
+  startPlacementDrag(created, viewPoint, imagePoint, event);
+  scheduleSave();
+  return created.id;
 }
 
 function onPointClaim(viewPoint, event) {
@@ -936,6 +998,7 @@ function onPointClaim(viewPoint, event) {
 
   if (mode === 'repeat') {
     handleRepeatabilityTap(imagePoint);
+    updateHint();
     scheduleRender();
     return true;
   }
@@ -952,7 +1015,7 @@ function onPointClaim(viewPoint, event) {
     });
     selectedEntityId = created.id;
     selectedEntityType = 'point';
-    justCreatedPointId = created.id;
+    startPlacementDrag(created, viewPoint, imagePoint, event);
     scheduleRender();
     scheduleSave();
     return true;
@@ -978,7 +1041,7 @@ function onPointClaim(viewPoint, event) {
     placedLandmarks.push({ landmarkId: landmark.id, pointId: created.id });
     selectedEntityId = created.id;
     selectedEntityType = 'point';
-    justCreatedPointId = created.id;
+    startPlacementDrag(created, viewPoint, imagePoint, event);
     justCreatedGuideMeasurementIds = [];
     if (isGuideComplete(activeGuide, placedLandmarks.map((p) => p.landmarkId))) {
       const pointIdByLandmark = Object.fromEntries(placedLandmarks.map((p) => [p.landmarkId, p.pointId]));
@@ -988,7 +1051,7 @@ function onPointClaim(viewPoint, event) {
       const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark, resolveAquamadTag);
       justCreatedGuideMeasurementIds = builtMeasurements.map((m) => m.id);
     }
-    updateGuideReadout();
+    updateHint();
     scheduleRender();
     scheduleSave();
     return true;
@@ -1004,31 +1067,33 @@ function onPointClaim(viewPoint, event) {
     // taps change nothing — cancel or confirm first.
     pendingSnapshotBeforeClaim = pendingPointIds.slice();
     if (pendingPointIds.length === 2) return true;
-    if (hit && hit.type === 'point' && !pendingPointIds.includes(hit.id)) {
-      pendingPointIds.push(hit.id);
+    const pickedId = pickOrCreatePoint(hit, viewPoint, imagePoint, event);
+    if (pickedId) {
+      pendingPointIds.push(pickedId);
       if (pendingPointIds.length === 2) openCalibrationPanel();
-    } else if (!hit) {
-      pendingPointIds = [];
     }
+    updateHint();
     scheduleRender();
     return true;
   }
 
   if (isMeasurementMode(mode)) {
-    // LINE/ANGLE/DISTANCE: tap an existing point to add it to the
-    // in-progress pick, in order, until enough points exist to create the
-    // measurement. Tapping empty space abandons the current pick. The
-    // pointer is always claimed here so a tap never starts a pan/drag.
+    // LINE/ANGLE/DISTANCE: each tap adds a point to the in-progress pick, in
+    // order — an existing point if the tap lands on one, otherwise a new point
+    // created right there (LOTE 2 §1) — until enough points exist to create the
+    // measurement. Tapping empty space no longer abandons the pick (the ✕ in
+    // #hint does). The pointer is always claimed here so a tap never starts a
+    // pan/drag.
     pendingSnapshotBeforeClaim = pendingPointIds.slice();
-    if (hit && hit.type === 'point' && !pendingPointIds.includes(hit.id)) {
-      pendingPointIds.push(hit.id);
+    const pickedId = pickOrCreatePoint(hit, viewPoint, imagePoint, event);
+    if (pickedId) {
+      pendingPointIds.push(pickedId);
       if (pendingPointIds.length === requiredPointCount(mode)) {
         const created = finishPendingMeasurement();
         justCreatedMeasurementId = created ? created.id : null;
       }
-    } else if (!hit) {
-      pendingPointIds = [];
     }
+    updateHint();
     scheduleRender();
     return true;
   }
@@ -1105,7 +1170,6 @@ function onPointDragEnd(point, event) {
       for (const id of justCreatedGuideMeasurementIds) removeEntity(project, id);
       justCreatedGuideMeasurementIds = [];
       placedLandmarks.pop();
-      updateGuideReadout();
       undidSomething = true;
     }
     if (justCreatedMeasurementId) {
@@ -1132,6 +1196,7 @@ function onPointDragEnd(point, event) {
   draggingPointId = null;
   magnifierPointerType = null;
   hideMagnifier();
+  updateHint();
 }
 
 attachPointerGestures(canvas, {

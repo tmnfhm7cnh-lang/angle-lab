@@ -93,6 +93,18 @@ const STRINGS = {
     guideReadoutWaiting: '{guide}: tap {landmark} ({n}/{total}).',
     guideReadoutDone: '{guide}: done. Switch to Select to inspect or adjust.',
 
+    hintSelect: 'Drag a point to move it. Tap a measurement to select it.',
+    hintPoint: 'Tap to place a point. Slide without lifting to fine-tune.',
+    hintAngleFirst: 'Angle · tap one end (1/3)',
+    hintAngleVertex: 'Angle · tap the vertex (2/3)',
+    hintAngleLast: 'Angle · tap the other end (3/3)',
+    hintPairFirst: 'Tap the first point (1/2)',
+    hintPairSecond: 'Tap the second point (2/2)',
+    hintCalibrateFirst: 'Calibrate · tap both ends of something whose real length you know (1/2)',
+    hintCalibrateSecond: 'Calibrate · tap the other end (2/2)',
+    hintCalibrateLength: 'Calibrate · type the real length',
+    hintCancel: 'Cancel selection',
+
     historyTitle: 'History',
     historyHint:
       'Every project saved on this device, most recent first. Subject code is editable right here. "New project" (top bar) saves the one you\'re on and starts a blank one — nothing here is ever deleted except with the buttons below.',
@@ -220,6 +232,18 @@ const STRINGS = {
     guideListItem: '{label} — {count} puntos',
     guideReadoutWaiting: '{guide}: toca {landmark} ({n}/{total}).',
     guideReadoutDone: '{guide}: hecho. Cambia a Seleccionar para revisar o ajustar.',
+
+    hintSelect: 'Arrastra un punto para moverlo. Toca una medida para seleccionarla.',
+    hintPoint: 'Toca para colocar un punto. Desliza sin soltar para afinar.',
+    hintAngleFirst: 'Ángulo · toca un extremo (1/3)',
+    hintAngleVertex: 'Ángulo · toca el vértice (2/3)',
+    hintAngleLast: 'Ángulo · toca el otro extremo (3/3)',
+    hintPairFirst: 'Toca el primer punto (1/2)',
+    hintPairSecond: 'Toca el segundo punto (2/2)',
+    hintCalibrateFirst: 'Calibrar · toca los dos extremos de algo cuya longitud real conozcas (1/2)',
+    hintCalibrateSecond: 'Calibrar · toca el otro extremo (2/2)',
+    hintCalibrateLength: 'Calibrar · escribe la longitud real',
+    hintCancel: 'Cancelar selección',
 
     historyTitle: 'Historial',
     historyHint:

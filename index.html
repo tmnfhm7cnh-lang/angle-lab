@@ -78,8 +78,10 @@
         <button id="calibration-confirm" class="bar-button" type="button" data-i18n="calibrationConfirm">Calibrate</button>
         <button id="calibration-cancel" class="bar-button ghost-button" type="button" data-i18n="calibrationCancel">Cancel</button>
       </div>
-      <div id="repeat-readout" hidden></div>
-      <div id="guide-readout" hidden></div>
+      <div id="hint" hidden>
+        <span id="hint-text"></span>
+        <button id="hint-cancel" type="button" hidden aria-label="Cancel selection" data-i18n-aria="hintCancel">&#x2715;</button>
+      </div>
       <div class="empty" id="empty-state">
         <svg class="empty-mark" viewBox="0 0 180 180" fill="none" stroke-linecap="round">
           <g stroke="var(--al-ink)" stroke-width="6">
