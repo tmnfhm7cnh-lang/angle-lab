@@ -200,6 +200,13 @@ export async function saveBlob(imageId, blob) {
   return !(result && result.failed);
 }
 
+// LOTE 6: drops one photo's Blob (when that photo is deleted from its project). Same tolerance as
+// saveBlob: false if IndexedDB failed, never a throw.
+export async function deleteBlob(imageId) {
+  const result = await withStore(BLOB_STORE, 'readwrite', (store) => runRequest(store.delete(imageId)));
+  return !(result && result.failed);
+}
+
 export async function loadBlob(imageId) {
   const result = await withStore(BLOB_STORE, 'readonly', (store) => runRequest(store.get(imageId)));
   if (result && result.failed) return null;

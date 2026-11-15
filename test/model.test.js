@@ -23,6 +23,9 @@ import {
   deserialize,
   setSubjectCode,
   setMeasurementTag,
+  setActiveImage,
+  removeImage,
+  countImageContents,
 } from '../src/core/model.js';
 
 function projectWithImage() {
@@ -531,5 +534,124 @@ describe('serialize / deserialize', () => {
     const restored = deserialize(data);
     assert.equal(restored.displayUnit, 'cm');
     assert.deepEqual(restored.calibrations, {});
+  });
+});
+
+describe('setActiveImage', () => {
+  test('activates an image of the project', () => {
+    const project = createProject();
+    const a = addImage(project, { width: 10, height: 10 });
+    const b = addImage(project, { width: 10, height: 10 });
+    assert.equal(project.activeImageId, a.id);
+    assert.equal(setActiveImage(project, b.id), true);
+    assert.equal(project.activeImageId, b.id);
+  });
+
+  test('returns false and changes nothing for an image that is not in the project', () => {
+    const project = createProject();
+    const a = addImage(project, { width: 10, height: 10 });
+    assert.equal(setActiveImage(project, 'nope'), false);
+    assert.equal(project.activeImageId, a.id);
+  });
+});
+
+describe('removeImage', () => {
+  function threePhotos() {
+    const project = createProject();
+    const images = [1, 2, 3].map(() => addImage(project, { width: 100, height: 100 }));
+    const data = images.map((image) => {
+      const a = addPoint(project, { imageId: image.id, x: 10, y: 10 });
+      const v = addPoint(project, { imageId: image.id, x: 50, y: 10 });
+      const c = addPoint(project, { imageId: image.id, x: 50, y: 60 });
+      const angle = addAngle(project, a.id, v.id, c.id);
+      const dist = addDistance(project, a.id, c.id);
+      setCalibration(project, { imageId: image.id, aId: a.id, bId: c.id, realLength: 10, unit: 'cm' });
+      addAnnotation(project, { imageId: image.id, x: 1, y: 1, text: 'n' });
+      return { image, points: [a, v, c], angle, dist };
+    });
+    return { project, data };
+  }
+
+  test('removes the image with its points, measurements, calibration and annotations', () => {
+    const { project, data } = threePhotos();
+    const second = data[1];
+    assert.equal(removeImage(project, second.image.id), true);
+    assert.equal(project.images.some((i) => i.id === second.image.id), false);
+    assert.equal(project.points.some((p) => p.imageId === second.image.id), false);
+    assert.equal(project.measurements.some((m) => m.id === second.angle.id || m.id === second.dist.id), false);
+    assert.equal(getCalibration(project, second.image.id), null);
+    assert.equal(project.annotations.some((a) => a.imageId === second.image.id), false);
+  });
+
+  test('does not touch anything that belongs to the other images', () => {
+    const { project, data } = threePhotos();
+    removeImage(project, data[1].image.id);
+    for (const keep of [data[0], data[2]]) {
+      assert.equal(project.points.filter((p) => p.imageId === keep.image.id).length, 3);
+      assert.ok(project.measurements.some((m) => m.id === keep.angle.id));
+      assert.ok(project.measurements.some((m) => m.id === keep.dist.id));
+      assert.ok(getCalibration(project, keep.image.id));
+      assert.equal(project.annotations.filter((a) => a.imageId === keep.image.id).length, 1);
+    }
+    assert.equal(project.images.length, 2);
+  });
+
+  test('removing the active image activates the previous one', () => {
+    const { project, data } = threePhotos();
+    setActiveImage(project, data[1].image.id);
+    removeImage(project, data[1].image.id);
+    assert.equal(project.activeImageId, data[0].image.id);
+  });
+
+  test('removing the first active image activates the next one, not nothing', () => {
+    const { project, data } = threePhotos();
+    removeImage(project, data[0].image.id);
+    assert.equal(project.activeImageId, data[1].image.id);
+  });
+
+  test('removing a non-active image keeps the active one', () => {
+    const { project, data } = threePhotos();
+    setActiveImage(project, data[2].image.id);
+    removeImage(project, data[0].image.id);
+    assert.equal(project.activeImageId, data[2].image.id);
+  });
+
+  test('removing the only image leaves activeImageId null', () => {
+    const project = createProject();
+    const only = addImage(project, { width: 10, height: 10 });
+    removeImage(project, only.id);
+    assert.equal(project.activeImageId, null);
+    assert.equal(project.images.length, 0);
+  });
+
+  test('returns false for an unknown image and leaves the project alone', () => {
+    const { project } = threePhotos();
+    const before = JSON.stringify(project);
+    assert.equal(removeImage(project, 'nope'), false);
+    assert.equal(JSON.stringify(project), before);
+  });
+});
+
+describe('countImageContents', () => {
+  test('counts the points and the measurements (angles, distances, lines) of one image only', () => {
+    const project = createProject();
+    const one = addImage(project, { width: 100, height: 100 });
+    const two = addImage(project, { width: 100, height: 100 });
+    const p = (image, x) => addPoint(project, { imageId: image.id, x, y: 5 });
+    const [a, b, c] = [p(one, 1), p(one, 2), p(one, 3)];
+    addAngle(project, a.id, b.id, c.id);
+    addDistance(project, a.id, c.id);
+    addSegment(project, a.id, b.id);
+    const [d, e] = [p(two, 1), p(two, 9)];
+    addDistance(project, d.id, e.id);
+    assert.deepEqual(countImageContents(project, one.id), { points: 3, measurements: 3 });
+    assert.deepEqual(countImageContents(project, two.id), { points: 2, measurements: 1 });
+  });
+
+  test('an image with nothing on it, or an unknown one, is zero', () => {
+    const project = createProject();
+    const one = addImage(project, { width: 10, height: 10 });
+    assert.deepEqual(countImageContents(project, one.id), { points: 0, measurements: 0 });
+    assert.deepEqual(countImageContents(project, 'nope'), { points: 0, measurements: 0 });
   });
 });

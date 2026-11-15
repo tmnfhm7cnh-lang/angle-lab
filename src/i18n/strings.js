@@ -112,6 +112,11 @@ const STRINGS = {
     hintLineSecond: 'Line · tap the second point (2/2)',
 
     menuButton: 'Menu',
+    menuSectionPhotos: 'Photos in this project',
+    photoThumbLabel: 'Photo {n}',
+    photoAddLabel: 'Add a photo',
+    photoDeleteLabel: 'Delete photo {n}',
+    photoDeleteConfirm: 'Delete photo {n}? Its points ({p}) and measurements ({m}) go with it and this cannot be undone.',
     menuSectionPhoto: 'Photo',
     menuSectionProject: 'Project',
     menuSectionMeasure: 'Measurement',
@@ -266,6 +271,11 @@ const STRINGS = {
     hintLineSecond: 'Línea · toca el segundo punto (2/2)',
 
     menuButton: 'Menú',
+    menuSectionPhotos: 'Fotos de este proyecto',
+    photoThumbLabel: 'Foto {n}',
+    photoAddLabel: 'Añadir una foto',
+    photoDeleteLabel: 'Borrar la foto {n}',
+    photoDeleteConfirm: '¿Borrar la foto {n}? Se pierden sus puntos ({p}) y sus medidas ({m}) y no se puede deshacer.',
     menuSectionPhoto: 'Foto',
     menuSectionProject: 'Proyecto',
     menuSectionMeasure: 'Medición',

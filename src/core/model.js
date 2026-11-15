@@ -86,6 +86,43 @@ export function addImage(project, { blobKey, width, height, exifOrientation = 0,
   return image;
 }
 
+// LOTE 6: choosing which photo of the project is open. False (and nothing changes) for an id the
+// project does not have.
+export function setActiveImage(project, imageId) {
+  if (!project.images.some((image) => image.id === imageId)) return false;
+  project.activeImageId = imageId;
+  touch(project);
+  return true;
+}
+
+// LOTE 6: deletes one photo and everything that hangs off it — its points (removePoint takes the
+// segments, measurements and calibration that use them along), any leftover calibration entry and
+// its annotations. Other photos are not touched. If it was the open photo, the previous one opens
+// (or the next, if it was the first), and null only when no photo is left.
+export function removeImage(project, imageId) {
+  const index = project.images.findIndex((image) => image.id === imageId);
+  if (index < 0) return false;
+  for (const point of project.points.filter((p) => p.imageId === imageId)) removePoint(project, point.id);
+  project.annotations = project.annotations.filter((a) => a.imageId !== imageId);
+  delete project.calibrations[imageId];
+  project.images.splice(index, 1);
+  if (project.activeImageId === imageId) {
+    const fallback = project.images[index - 1] || project.images[index] || null;
+    project.activeImageId = fallback ? fallback.id : null;
+  }
+  touch(project);
+  return true;
+}
+
+// LOTE 6: what deleting this photo would take with it, for the confirmation message. Measurements
+// here means everything that has a value or a line on the photo: angles, distances and lines.
+export function countImageContents(project, imageId) {
+  const ids = new Set(project.points.filter((p) => p.imageId === imageId).map((p) => p.id));
+  const measurements =
+    project.measurements.filter((m) => ids.has(m.aId)).length + project.segments.filter((s) => ids.has(s.aId)).length;
+  return { points: ids.size, measurements };
+}
+
 // LOTE 2 audit: a NaN coordinate used to be accepted, serialize() turned it
 // into `null` (JSON.stringify(NaN) === 'null'), and reading it back left the
 // point silently sitting at 0 — a distance that never existed, reported with

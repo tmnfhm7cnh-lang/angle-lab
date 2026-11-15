@@ -26,6 +26,9 @@ import {
   deserialize,
   setSubjectCode,
   setMeasurementTag,
+  setActiveImage,
+  removeImage,
+  countImageContents,
 } from '../core/model.js';
 import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measurements.js';
 import { hitTest } from '../core/hittest.js';
@@ -44,6 +47,7 @@ import {
   setActiveProjectId,
   saveBlob,
   loadBlob,
+  deleteBlob,
   clearAll,
   requestPersistence,
   estimateStorageRatio,
@@ -894,6 +898,7 @@ guideCloseButton.addEventListener('click', () => guideDialog.close());
 // (capture), so a dialog opened by that row is not stacked on top of the sheet. Rows with
 // data-menu-tool switch to that tool. The photo inputs close it once a file is actually chosen.
 function openMenu() {
+  renderThumbs();
   menuSheet.showModal();
 }
 menuButton.addEventListener('click', openMenu);
@@ -915,6 +920,169 @@ menuSheet.addEventListener('click', (event) => {
 });
 for (const input of [fileInput, cameraInput]) input.addEventListener('change', () => menuSheet.close());
 disclaimerProtocolLink.addEventListener('click', () => protocolDialog.showModal());
+
+// LOTE 6: several photos per project. The strip of thumbnails in the menu sheet shows them in
+// order, the open one outlined; a tap opens that photo, the ✕ (or a long press) deletes it after
+// a confirmation that says what goes with it, and the last cell adds another photo.
+const THUMB_LONG_SIDE = 144;
+const LONG_PRESS_MS = 600;
+const thumbsSection = document.getElementById('thumbs-section');
+const thumbsContainer = document.getElementById('thumbs');
+const thumbCache = new Map(); // imageId -> ImageBitmap, 144 px on the long side
+let thumbsGeneration = 0;
+let switchingImage = false;
+
+async function thumbnailFor(imageRef) {
+  if (thumbCache.has(imageRef.id)) return thumbCache.get(imageRef.id);
+  const blob = (imageRef.id === project.activeImageId && image?.originalBlob) || (await loadBlob(imageRef.id));
+  if (!blob) return null;
+  try {
+    // Decode straight to thumbnail size (the stored width/height already include the EXIF turn):
+    // a 48 MP photo is never decoded in full just to draw 72 px.
+    const scale = Math.min(1, THUMB_LONG_SIDE / Math.max(imageRef.width, imageRef.height));
+    const bitmap = await createImageBitmap(blob, {
+      imageOrientation: 'from-image',
+      resizeWidth: Math.max(1, Math.round(imageRef.width * scale)),
+      resizeHeight: Math.max(1, Math.round(imageRef.height * scale)),
+      resizeQuality: 'medium',
+    });
+    thumbCache.set(imageRef.id, bitmap);
+    return bitmap;
+  } catch {
+    return null;
+  }
+}
+
+// Paints the bitmap into the square thumbnail canvas, cropped to fill it.
+function paintThumb(canvasEl, bitmap) {
+  const ctxThumb = canvasEl.getContext('2d');
+  const side = canvasEl.width;
+  const crop = Math.min(bitmap.width, bitmap.height);
+  ctxThumb.drawImage(bitmap, (bitmap.width - crop) / 2, (bitmap.height - crop) / 2, crop, crop, 0, 0, side, side);
+}
+
+async function renderThumbs() {
+  const generation = ++thumbsGeneration;
+  thumbsContainer.replaceChildren();
+  thumbsSection.hidden = project.images.length === 0;
+  const pending = [];
+  project.images.forEach((imageRef, index) => {
+    const number = index + 1;
+    const cell = document.createElement('div');
+    cell.className = 'thumb-cell';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'thumb';
+    button.setAttribute('aria-label', t('photoThumbLabel', { n: number }));
+    if (imageRef.id === project.activeImageId) {
+      button.classList.add('current');
+      button.setAttribute('aria-current', 'true');
+    }
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = 144;
+    thumbCanvas.height = 144;
+    const label = document.createElement('small');
+    label.textContent = String(number);
+    button.append(thumbCanvas, label);
+
+    let pressTimer = null;
+    let longPressFired = false;
+    button.addEventListener('pointerdown', () => {
+      longPressFired = false;
+      pressTimer = setTimeout(() => {
+        longPressFired = true;
+        deleteImageFromProject(imageRef.id);
+      }, LONG_PRESS_MS);
+    });
+    for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+      button.addEventListener(type, () => clearTimeout(pressTimer));
+    }
+    button.addEventListener('contextmenu', (event) => event.preventDefault());
+    button.addEventListener('click', () => {
+      if (longPressFired) {
+        longPressFired = false;
+        return;
+      }
+      menuSheet.close();
+      switchToImage(imageRef.id);
+    });
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'thumb-delete';
+    remove.textContent = '✕';
+    remove.setAttribute('aria-label', t('photoDeleteLabel', { n: number }));
+    remove.addEventListener('click', () => deleteImageFromProject(imageRef.id));
+
+    cell.append(button, remove);
+    thumbsContainer.appendChild(cell);
+
+    pending.push(
+      thumbnailFor(imageRef).then((bitmap) => {
+        if (bitmap && generation === thumbsGeneration) paintThumb(thumbCanvas, bitmap);
+      }),
+    );
+  });
+
+  const add = document.createElement('label');
+  add.className = 'thumb add';
+  add.htmlFor = 'file-input';
+  add.setAttribute('aria-label', t('photoAddLabel'));
+  add.textContent = '+';
+  thumbsContainer.appendChild(add);
+  await Promise.all(pending);
+}
+
+// Opens another photo of the open project. Saves first; the editing state that belongs to the
+// photo being left (selection, pending picks, undo history, the bitmap) is reset exactly as when a
+// whole project is opened, and the new photo is decoded from its stored Blob.
+async function switchToImage(imageId) {
+  if (switchingImage || imageId === project.activeImageId) return;
+  switchingImage = true;
+  try {
+    flushSave();
+    if (!setActiveImage(project, imageId)) return;
+    resetEditingState();
+    setMode(mode, activeGuide);
+    await loadImageForActiveProject();
+    scheduleSave();
+    flushSave();
+    scheduleRender();
+  } finally {
+    switchingImage = false;
+  }
+}
+
+async function deleteImageFromProject(imageId) {
+  const index = project.images.findIndex((img) => img.id === imageId);
+  if (index < 0 || switchingImage) return;
+  const { points, measurements } = countImageContents(project, imageId);
+  if (!confirm(t('photoDeleteConfirm', { n: index + 1, p: points, m: measurements }))) return;
+  switchingImage = true;
+  try {
+    const wasActive = imageId === project.activeImageId;
+    removeImage(project, imageId);
+    await deleteBlob(imageId);
+    thumbCache.get(imageId)?.close();
+    thumbCache.delete(imageId);
+    if (wasActive) {
+      resetEditingState();
+      setMode(mode, activeGuide);
+      await loadImageForActiveProject();
+    } else {
+      // Another photo stays open as it is; only the undo history (it still holds the deleted
+      // photo and its Blob is gone) must not survive.
+      editHistory.clear();
+    }
+    scheduleSave();
+    flushSave();
+    scheduleRender();
+    renderThumbs();
+  } finally {
+    switchingImage = false;
+  }
+}
 
 // LOTE 5 §3: the four content dialogs share one behaviour — the ✕ closes, and so does a tap
 // outside the box (a click whose target is the <dialog> itself but whose point is outside its
