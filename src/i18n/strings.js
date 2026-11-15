@@ -83,11 +83,11 @@ const STRINGS = {
       'The on-screen quality colour (green/amber/red) reflects <strong>placement precision</strong> only — how exactly the points were tapped, at what zoom. It does not know about, and cannot warn about, camera tilt or distance.',
     protocolBullet8: 'angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.',
 
-    guideTitle: 'Measurement guide',
+    guideTitle: 'Measurement guides',
     guideListEmpty: 'No guides yet.',
     guideListItem: '{label} — {count} points',
     guideReadoutWaiting: '{guide}: tap {landmark} ({n}/{total}).',
-    guideReadoutDone: '{guide}: done. Switch to Select to inspect or adjust.',
+    guideReadoutDone: '{guide}: done. Switch to Move to inspect or adjust.',
 
     hintSelect: 'Drag a point to move it. Tap a measurement to select it.',
     hintPoint: 'Tap to place a point. Slide without lifting to fine-tune.',
@@ -300,11 +300,11 @@ const STRINGS = {
       'El color de calidad en pantalla (verde/ámbar/rojo) refleja solo la <strong>precisión de colocación</strong> — con qué exactitud se tocaron los puntos, a qué zoom. No sabe nada de, ni puede avisar de, la inclinación o la distancia de la cámara.',
     protocolBullet8: 'angle-lab <strong>mide y reporta</strong>. No diagnostica ni recomienda.',
 
-    guideTitle: 'Guía de medición',
+    guideTitle: 'Guías de medición',
     guideListEmpty: 'Todavía no hay guías.',
     guideListItem: '{label} — {count} puntos',
     guideReadoutWaiting: '{guide}: toca {landmark} ({n}/{total}).',
-    guideReadoutDone: '{guide}: hecho. Cambia a Seleccionar para revisar o ajustar.',
+    guideReadoutDone: '{guide}: hecho. Cambia a Mover para revisar o ajustar.',
 
     hintSelect: 'Arrastra un punto para moverlo. Toca una medida para seleccionarla.',
     hintPoint: 'Toca para colocar un punto. Desliza sin soltar para afinar.',
