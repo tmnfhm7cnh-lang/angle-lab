@@ -104,6 +104,8 @@ const STRINGS = {
     hintCalibrateSecond: 'Calibrate · tap the other end (2/2)',
     hintCalibrateLength: 'Calibrate · type the real length',
     hintCancel: 'Cancel selection',
+    undoButton: 'Undo',
+    redoButton: 'Redo',
 
     historyTitle: 'History',
     historyHint:
@@ -244,6 +246,8 @@ const STRINGS = {
     hintCalibrateSecond: 'Calibrar · toca el otro extremo (2/2)',
     hintCalibrateLength: 'Calibrar · escribe la longitud real',
     hintCancel: 'Cancelar selección',
+    undoButton: 'Deshacer',
+    redoButton: 'Rehacer',
 
     historyTitle: 'Historial',
     historyHint:

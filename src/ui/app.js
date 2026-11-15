@@ -1,4 +1,5 @@
-import { createViewport, fitImage, zoomAt, panBy, clampToBounds, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
+import { createViewport, fitImage, zoomAt, panBy, clampToBounds, clampToImage, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
+import { createHistory } from '../core/history.js';
 import { isSafeReturnUrl } from '../core/returnUrl.js';
 import { describeHint } from '../core/hint.js';
 import { localDateISO, addDays } from '../core/dates.js';
@@ -61,6 +62,8 @@ const ctx = canvas.getContext('2d');
 const fileInput = document.getElementById('file-input');
 const cameraInput = document.getElementById('camera-input');
 const fitButton = document.getElementById('fit-button');
+const undoButton = document.getElementById('undo-button');
+const redoButton = document.getElementById('redo-button');
 const readoutLabel = document.getElementById('readout-label');
 const readoutValue = document.getElementById('readout-value');
 const emptyState = document.getElementById('empty-state');
@@ -182,6 +185,17 @@ let magnifierDpr = 1;
 let renderScheduled = false;
 
 let project = createProject();
+// LOTE 3: undo/redo of confirmed changes. Named editHistory because window.history is already
+// used for the ?return= cleanup. Snapshots are serialize(project), pushed just BEFORE a change.
+const editHistory = createHistory({ limit: 50 });
+// One undo step per gesture: a tap that creates a point AND completes a measurement, or a drag,
+// pushes once. Reset when a claim starts and when it ends.
+let gestureHistoryPushed = false;
+function pushHistoryOnce() {
+  if (gestureHistoryPushed) return;
+  editHistory.push(serialize(project));
+  gestureHistoryPushed = true;
+}
 let mode = 'select'; // 'select' | 'point' | 'line' | 'angle' | 'distance'
 // The selected entity can be a point, segment, angle or distance — one id
 // plus its type, since delete and highlighting both need to know which.
@@ -412,6 +426,7 @@ function confirmCalibration() {
     scheduleRender();
     return;
   }
+  editHistory.push(serialize(project));
   const created = setCalibration(project, {
     imageId: project.activeImageId,
     aId,
@@ -420,6 +435,7 @@ function confirmCalibration() {
     unit: calibrationUnitSelect.value,
   });
   if (!created) {
+    editHistory.discardLast();
     // Input already validated above, so what is left is coincident / too-close reference points.
     // Keep the pick and the panel open so the length typed is not lost.
     showCalibrationError('calibrationErrorTooClose');
@@ -450,6 +466,7 @@ displayUnitSelect.addEventListener('change', () => {
 });
 clearCalibrationButton.addEventListener('click', () => {
   if (!project.activeImageId) return;
+  editHistory.push(serialize(project));
   clearCalibration(project, project.activeImageId);
   scheduleRender();
   scheduleSave();
@@ -602,6 +619,8 @@ function scheduleRender() {
     updateReturnBar();
     updateHint();
     deleteButton.disabled = !selectedEntityId;
+    undoButton.disabled = !editHistory.canUndo;
+    redoButton.disabled = !editHistory.canRedo;
     emptyState.hidden = !!image;
   });
 }
@@ -643,6 +662,7 @@ async function loadFile(file) {
   // LOTE 3 §3: the model no longer stores the filename anywhere (see below) —
   // image.id (a UUID model.js already generates) is the only key IndexedDB
   // ever sees for this photo's Blob.
+  editHistory.clear();
   const imageRef = addImage(project, { width: imageSize.width, height: imageSize.height });
   project.activeImageId = imageRef.id;
   selectedEntityId = null;
@@ -820,6 +840,7 @@ function deleteSelected() {
   // removeEntity dispatches by entity kind and, for a point, cascades to
   // every segment/angle/distance/calibration that referenced it — a
   // measurement never lingers with a dangling point reference.
+  editHistory.push(serialize(project));
   removeEntity(project, selectedEntityId);
   selectedEntityId = null;
   selectedEntityType = null;
@@ -842,6 +863,60 @@ window.addEventListener('keydown', (event) => {
   if (!selectedEntityId) return;
   event.preventDefault();
   deleteSelected();
+});
+
+// LOTE 3: undo/redo. Restores a whole-project snapshot; the photo, the open project and the
+// tool stay. subjectCode and displayUnit are not undoable gestures (they are edited elsewhere),
+// so they are carried over instead of being rolled back with the points.
+function restoreSnapshot(snapshot) {
+  if (!snapshot) return;
+  const restored = deserialize(snapshot);
+  restored.subjectCode = project.subjectCode;
+  restored.displayUnit = project.displayUnit;
+  project = restored;
+  selectedEntityId = null;
+  selectedEntityType = null;
+  pendingPointIds = [];
+  pendingSnapshotBeforeClaim = null;
+  justCreatedPointId = null;
+  justCreatedMeasurementId = null;
+  justCreatedGuideMeasurementIds = [];
+  draggingPointId = null;
+  hideMagnifier();
+  // A guide in progress keeps only the landmarks whose point still exists.
+  placedLandmarks = placedLandmarks.filter((p) => getPoint(project, p.pointId));
+  closeCalibrationPanel();
+  updateHint();
+  scheduleRender();
+  scheduleSave();
+}
+
+function undo() {
+  restoreSnapshot(editHistory.undo(serialize(project)));
+}
+
+function redo() {
+  restoreSnapshot(editHistory.redo(serialize(project)));
+}
+
+undoButton.addEventListener('click', undo);
+redoButton.addEventListener('click', redo);
+
+window.addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 'z') return;
+  if (document.querySelector('dialog[open]')) return;
+  if (draggingPointId) return;
+  for (const el of [event.target, document.activeElement]) {
+    if (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement ||
+      (el instanceof HTMLElement && el.isContentEditable)
+    ) return;
+  }
+  event.preventDefault();
+  if (event.shiftKey) redo();
+  else undo();
 });
 
 function setupMagnifierCanvas() {
@@ -889,6 +964,7 @@ function hideMagnifier() {
 // (or two) picked point ids, in tap order — the second tap of an ANGLE is
 // the vertex, matching addAngle(project, aId, vertexId, cId).
 function finishPendingMeasurement() {
+  pushHistoryOnce();
   const [id1, id2, id3] = pendingPointIds;
   let created;
   let type;
@@ -981,6 +1057,7 @@ function pickOrCreatePoint(hit, viewPoint, imagePoint, event) {
   if (hit && hit.type === 'point') {
     return pendingPointIds.includes(hit.id) ? null : hit.id;
   }
+  pushHistoryOnce();
   const created = addPoint(project, {
     imageId: project.activeImageId,
     x: imagePoint.x,
@@ -993,8 +1070,12 @@ function pickOrCreatePoint(hit, viewPoint, imagePoint, event) {
 }
 
 function onPointClaim(viewPoint, event) {
+  gestureHistoryPushed = false;
   if (!image || !project.activeImageId) return false;
   const imagePoint = viewToImage(viewPoint, viewport);
+  // LOTE 3 §6: a point is never created outside the photo. The hit-test and the repeat taps
+  // keep the raw touch position; only what gets stored (and shown in the loupe) is clamped.
+  const placePoint = clampToImage(imagePoint, image.imageSize);
 
   if (mode === 'repeat') {
     handleRepeatabilityTap(imagePoint);
@@ -1004,10 +1085,11 @@ function onPointClaim(viewPoint, event) {
   }
 
   if (mode === 'point') {
+    pushHistoryOnce();
     const created = addPoint(project, {
       imageId: project.activeImageId,
-      x: imagePoint.x,
-      y: imagePoint.y,
+      x: placePoint.x,
+      y: placePoint.y,
       // The zoom this point was placed at — uncertainty.js turns it into an
       // image-pixel error for the sigma shown on every angle/distance that
       // uses this point (LOTE 2 §2.2).
@@ -1015,7 +1097,7 @@ function onPointClaim(viewPoint, event) {
     });
     selectedEntityId = created.id;
     selectedEntityType = 'point';
-    startPlacementDrag(created, viewPoint, imagePoint, event);
+    startPlacementDrag(created, viewPoint, placePoint, event);
     scheduleRender();
     scheduleSave();
     return true;
@@ -1030,10 +1112,11 @@ function onPointClaim(viewPoint, event) {
     // in LINE/ANGLE/DISTANCE. The user switches tools (or reopens the guide
     // list) deliberately instead.
     if (!landmark) return false;
+    pushHistoryOnce();
     const created = addPoint(project, {
       imageId: project.activeImageId,
-      x: imagePoint.x,
-      y: imagePoint.y,
+      x: placePoint.x,
+      y: placePoint.y,
       placementScale: viewport.scale,
       label: landmark.label,
       landmark: landmark.id,
@@ -1041,7 +1124,7 @@ function onPointClaim(viewPoint, event) {
     placedLandmarks.push({ landmarkId: landmark.id, pointId: created.id });
     selectedEntityId = created.id;
     selectedEntityType = 'point';
-    startPlacementDrag(created, viewPoint, imagePoint, event);
+    startPlacementDrag(created, viewPoint, placePoint, event);
     justCreatedGuideMeasurementIds = [];
     if (isGuideComplete(activeGuide, placedLandmarks.map((p) => p.landmarkId))) {
       const pointIdByLandmark = Object.fromEntries(placedLandmarks.map((p) => [p.landmarkId, p.pointId]));
@@ -1067,7 +1150,7 @@ function onPointClaim(viewPoint, event) {
     // taps change nothing — cancel or confirm first.
     pendingSnapshotBeforeClaim = pendingPointIds.slice();
     if (pendingPointIds.length === 2) return true;
-    const pickedId = pickOrCreatePoint(hit, viewPoint, imagePoint, event);
+    const pickedId = pickOrCreatePoint(hit, viewPoint, placePoint, event);
     if (pickedId) {
       pendingPointIds.push(pickedId);
       if (pendingPointIds.length === 2) openCalibrationPanel();
@@ -1085,7 +1168,7 @@ function onPointClaim(viewPoint, event) {
     // #hint does). The pointer is always claimed here so a tap never starts a
     // pan/drag.
     pendingSnapshotBeforeClaim = pendingPointIds.slice();
-    const pickedId = pickOrCreatePoint(hit, viewPoint, imagePoint, event);
+    const pickedId = pickOrCreatePoint(hit, viewPoint, placePoint, event);
     if (pickedId) {
       pendingPointIds.push(pickedId);
       if (pendingPointIds.length === requiredPointCount(mode)) {
@@ -1132,7 +1215,10 @@ function onPointClaim(viewPoint, event) {
 
 function onPointDragMove(viewPoint) {
   if (!draggingPointId) return;
-  const imagePoint = viewToImage(viewPoint, viewport);
+  const imagePoint = clampToImage(viewToImage(viewPoint, viewport), image.imageSize);
+  // First movement of a drag in Select: snapshot the state before the point moves. For a point
+  // just created by this same gesture the step was already pushed at creation.
+  pushHistoryOnce();
   movePoint(project, draggingPointId, imagePoint.x, imagePoint.y, viewport.scale);
   if (magnifierPointerType !== 'pen') showMagnifierAt(viewPoint, imagePoint);
   scheduleRender();
@@ -1188,8 +1274,13 @@ function onPointDragEnd(point, event) {
       if (mode === 'calibrate' && pendingPointIds.length < 2) closeCalibrationPanel();
     }
     scheduleRender();
-    if (undidSomething) scheduleSave();
+    if (undidSomething) {
+      scheduleSave();
+      // The gesture was rolled back by hand, so it must not stay as an undo step.
+      if (gestureHistoryPushed) editHistory.discardLast();
+    }
   }
+  gestureHistoryPushed = false;
   justCreatedPointId = null;
   pendingSnapshotBeforeClaim = null;
   justCreatedMeasurementId = null;
@@ -1245,6 +1336,8 @@ function resetEditingState() {
   pendingPointIds = [];
   closeCalibrationPanel();
   clearError();
+  // Another project (or none) is now open: the old project's snapshots no longer apply.
+  editHistory.clear();
 }
 
 function cancelPendingSave() {
@@ -1473,6 +1566,7 @@ function renderExportReadings() {
     metricSelect.disabled = !testSelect.value;
 
     function applyTag() {
+      editHistory.push(serialize(project));
       if (testSelect.value && metricSelect.value) {
         setMeasurementTag(project, r.id, { test: testSelect.value, metric: metricSelect.value });
       } else {

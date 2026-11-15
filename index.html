@@ -17,6 +17,12 @@
 <body>
   <div id="app">
     <header id="top-bar">
+      <button id="undo-button" class="bar-button icon-button" type="button" disabled aria-label="Undo" data-i18n-aria="undoButton">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 4 3.5 8.5 8 13" /><path d="M3.5 8.5H12a4.5 4.5 0 0 1 0 9H8" /></svg>
+      </button>
+      <button id="redo-button" class="bar-button icon-button" type="button" disabled aria-label="Redo" data-i18n-aria="redoButton">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 4l4.5 4.5L12 13" /><path d="M16.5 8.5H8a4.5 4.5 0 0 0 0 9h4" /></svg>
+      </button>
       <label class="bar-button">
         <span data-i18n="libraryButton">Library</span>
         <input id="file-input" type="file" accept="image/*" hidden />

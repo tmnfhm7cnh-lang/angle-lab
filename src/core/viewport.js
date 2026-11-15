@@ -147,3 +147,15 @@ export function recenterOnResize(vp, oldSize, newSize) {
     ty: vp.ty + (newSize.height - oldSize.height) / 2,
   };
 }
+
+/**
+ * Pulls an image-space point back onto the photo: x into [0, width], y into
+ * [0, height]. A tap or drag in the grey margin must leave the point on the
+ * photo's edge, never at coordinates that belong to no pixel. Returns a new object.
+ */
+export function clampToImage(point, imageSize) {
+  return {
+    x: Math.min(Math.max(point.x, 0), imageSize.width),
+    y: Math.min(Math.max(point.y, 0), imageSize.height),
+  };
+}

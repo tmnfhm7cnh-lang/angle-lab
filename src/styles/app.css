@@ -61,6 +61,23 @@ html, body {
               transform var(--al-dur-instant) var(--al-ease-standard);
 }
 
+/* Icon-only bar button (undo/redo): a 44x44 square, the label lives in aria-label. */
+.icon-button {
+  width: var(--al-tap);
+  padding: 0;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .bar-button:active {
   background: var(--al-surface-3);
   transform: translateY(0.5px);

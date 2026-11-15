@@ -10,6 +10,7 @@ import {
   zoomAt,
   panBy,
   clampToBounds,
+  clampToImage,
   sanitizeViewport,
   recenterOnResize,
 } from '../src/core/viewport.js';
@@ -365,5 +366,30 @@ describe('recenterOnResize', () => {
   test('a collapsed old size (first layout) leaves the viewport unchanged', () => {
     const vp = createViewport({ scale: 1, tx: 7, ty: 9 });
     assert.deepEqual(recenterOnResize(vp, { width: 0, height: 0 }, { width: 400, height: 600 }), vp);
+  });
+});
+
+describe('clampToImage', () => {
+  const size = { width: 800, height: 1000 };
+
+  test('a point inside the image is returned unchanged', () => {
+    assert.deepEqual(clampToImage({ x: 12.5, y: 990 }, size), { x: 12.5, y: 990 });
+  });
+
+  test('a point in the margin lands on the nearest edge', () => {
+    assert.deepEqual(clampToImage({ x: -30, y: 400 }, size), { x: 0, y: 400 });
+    assert.deepEqual(clampToImage({ x: 900, y: 400 }, size), { x: 800, y: 400 });
+    assert.deepEqual(clampToImage({ x: 400, y: -5 }, size), { x: 400, y: 0 });
+    assert.deepEqual(clampToImage({ x: 400, y: 1200 }, size), { x: 400, y: 1000 });
+  });
+
+  test('a corner point is clamped on both axes', () => {
+    assert.deepEqual(clampToImage({ x: -1, y: 1001 }, size), { x: 0, y: 1000 });
+  });
+
+  test('does not mutate its input', () => {
+    const p = { x: -3, y: -3 };
+    clampToImage(p, size);
+    assert.deepEqual(p, { x: -3, y: -3 });
   });
 });
