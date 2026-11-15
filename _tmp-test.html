@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head><script>window.requestAnimationFrame=function(cb){return setTimeout(function(){cb(performance.now())},16)}</script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B0E13" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="angle-lab" />
+  <title>angle-lab</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="stylesheet" href="src/styles/tokens.css" />
+  <link rel="stylesheet" href="src/styles/app.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="top-bar">
+      <button id="menu-button" class="icon-button" type="button" aria-label="Menu" data-i18n-aria="menuButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+      </button>
+      <button id="project-chip" class="project-chip" type="button">
+        <span id="project-chip-code"></span>
+        <small id="project-chip-photo"></small>
+      </button>
+      <button id="undo-button" class="icon-button" type="button" disabled aria-label="Undo" data-i18n-aria="undoButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 4 9l4 4" /><path d="M4 9h10a5 5 0 0 1 0 10h-3" /></svg>
+      </button>
+      <button id="redo-button" class="icon-button" type="button" disabled aria-label="Redo" data-i18n-aria="redoButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 5 4 4-4 4" /><path d="M20 9H10a5 5 0 0 0 0 10h3" /></svg>
+      </button>
+      <button id="export-button" class="icon-button primary-icon" type="button" aria-label="Export" data-i18n-aria="exportButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6" /></svg>
+      </button>
+    </header>
+    <div id="disclaimer-bar">
+      <span id="disclaimer-text" data-i18n-html="disclaimerShort">Angles are <strong>projected</strong>: camera perpendicular to the gesture</span>
+      <button id="disclaimer-protocol-link" class="link-button" type="button" data-i18n="protocolButton">Protocol</button>
+    </div>
+    <div id="error-bar" role="alert" hidden></div>
+    <div id="storage-bar" role="status" hidden></div>
+    <main id="canvas-area">
+      <canvas id="view"></canvas>
+      <canvas id="magnifier" class="magnifier" hidden></canvas>
+      <div id="readout" class="readout" hidden>
+        <div class="readout-label" id="readout-label"></div>
+        <div class="readout-value" id="readout-value"></div>
+        <div class="readout-meta"><span id="readout-dot" class="quality-dot"></span><span id="readout-meta"></span></div>
+      </div>
+      <div class="status-chips">
+        <span id="scale-readout" class="chip" hidden><span id="scale-dot" class="chip-dot"></span><span id="scale-text"></span></span>
+        <button id="fit-button" class="chip" type="button" hidden aria-label="Fit to screen" data-i18n-aria="fitButton"></button>
+      </div>
+      <div id="calibration-panel" hidden>
+        <label class="calibration-field">
+          <span data-i18n="calibrationLengthLabel">Reference length</span>
+          <input id="calibration-length" type="number" inputmode="decimal" step="any" min="0" />
+        </label>
+        <select id="calibration-unit" data-i18n-aria="displayUnitLabel" aria-label="Unit">
+          <option value="mm">mm</option>
+          <option value="cm" selected>cm</option>
+          <option value="m">m</option>
+          <option value="in">in</option>
+        </select>
+        <p id="calibration-error" role="alert" hidden></p>
+        <button id="calibration-confirm" class="bar-button" type="button" data-i18n="calibrationConfirm">Calibrate</button>
+        <button id="calibration-cancel" class="bar-button ghost-button" type="button" data-i18n="calibrationCancel">Cancel</button>
+      </div>
+      <div id="hint" hidden>
+        <span id="hint-text"></span>
+        <button id="hint-cancel" type="button" hidden aria-label="Cancel selection" data-i18n-aria="hintCancel">&#x2715;</button>
+      </div>
+      <div id="selection-bar" class="selection-bar" hidden>
+        <button id="label-button" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12V5h7l9 9-7 7z" /><circle cx="8.5" cy="9.5" r="1.2" /></svg>
+          <span data-i18n="labelButton">Label</span>
+        </button>
+        <button id="delete-selected-button" class="danger" type="button" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" /></svg>
+          <span data-i18n="deleteSelectedButton">Delete selected</span>
+        </button>
+      </div>
+      <div class="empty" id="empty-state">
+        <svg class="empty-mark" viewBox="0 0 180 180" fill="none" stroke-linecap="round">
+          <g stroke="var(--al-ink)" stroke-width="6">
+            <line x1="60" y1="132" x2="60" y2="48" />
+            <line x1="60" y1="132" x2="142" y2="132" />
+          </g>
+          <path d="M 60 96 A 36 36 0 0 1 96 132" stroke="var(--al-mark-active)" stroke-width="4" />
+          <circle cx="60" cy="132" r="6" fill="var(--al-mark)" stroke="none" />
+        </svg>
+        <h1 class="empty-title">Angle Lab</h1>
+        <ol class="empty-steps">
+          <li><span class="empty-step-number" aria-hidden="true">1</span><span data-i18n="emptyStep1">Open a photo</span></li>
+          <li><span class="empty-step-number" aria-hidden="true">2</span><span data-i18n="emptyStep2">Tap the joints</span></li>
+          <li><span class="empty-step-number" aria-hidden="true">3</span><span data-i18n="emptyStep3">Read the angle</span></li>
+        </ol>
+        <p class="empty-trust" data-i18n="emptyTrust">Photos never leave this device.</p>
+        <div class="empty-actions">
+          <label class="bar-button primary-button">
+            <span data-i18n="openPhotoLabel">Open photo</span>
+            <input id="empty-file-input" type="file" accept="image/*" hidden />
+          </label>
+          <label class="bar-button ghost-button">
+            <span data-i18n="takePhotoLabel">Take photo</span>
+            <input id="empty-camera-input" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+        </div>
+      </div>
+    </main>
+    <footer id="tool-bar">
+      <div id="tool-group" role="group" aria-label="Tool" data-i18n-aria="toolGroupLabel">
+        <button class="tool-button" data-tool="select" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M5 4l13 7.5-5.5 1.5L15.5 19l-2.4 1.1-3-6.6L5 18z" /></svg>
+          <span class="tool-label" data-i18n="toolSelect">Move</span>
+        </button>
+        <button class="tool-button" data-tool="point" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /></svg>
+          <span class="tool-label" data-i18n="toolPoint">Point</span>
+        </button>
+        <button class="tool-button" data-tool="angle" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M5 19V6M5 19h14" /><path d="M5 12.5A6.5 6.5 0 0 1 11.5 19" /></svg>
+          <span class="tool-label" data-i18n="wordAngle">Angle</span>
+        </button>
+        <button class="tool-button" data-tool="distance" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M5 7v10M19 7v10" /></svg>
+          <span class="tool-label" data-i18n="wordDistance">Distance</span>
+        </button>
+        <button class="tool-button" data-tool="calibrate" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M4 15h16M4 10v10M20 10v10M8 15v-3M12 15v-4M16 15v-3" /></svg>
+          <span class="tool-label" data-i18n="toolCalibrate">Calibrate</span>
+        </button>
+        <button id="guide-button" class="tool-button" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M6 5h9l3 3v11H6z" /><path d="M9 11h6M9 15h4" /></svg>
+          <span class="tool-label" data-i18n="guideButton">Guides</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+  <dialog id="menu-sheet" class="sheet">
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <div class="grabber" aria-hidden="true"></div>
+        <button id="menu-close-button" class="icon-button" type="button" aria-label="Close" data-i18n-aria="closeButton">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <div id="thumbs-section" hidden>
+        <h2 data-i18n="menuSectionPhotos">Photos in this project</h2>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+      <h2 data-i18n="menuSectionPhoto">Photo</h2>
+      <div class="rows">
+        <label class="row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" /><circle cx="9" cy="10" r="1.5" /><path d="m5 17 5-4 3 2 3-3 3 3" /></svg>
+          <span data-i18n="libraryButton">Library</span>
+          <input id="file-input" type="file" accept="image/*" hidden />
+        </label>
+        <label class="row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+          <span data-i18n="cameraButton">Camera</span>
+          <input id="camera-input" type="file" accept="image/*" capture="environment" hidden />
+        </label>
+      </div>
+      <h2 data-i18n="menuSectionProject">Project</h2>
+      <div class="rows">
+        <button id="new-project-button" class="row" type="button" data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span data-i18n="newProjectButton">New project</span>
+        </button>
+        <button id="history-button" class="row" type="button" data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>
+          <span data-i18n="historyButton">History</span>
+        </button>
+      </div>
+      <h2 data-i18n="menuSectionMeasure">Measurement</h2>
+      <div class="rows">
+        <div class="row">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15h16M4 10v10M20 10v10" /></svg>
+          <span data-i18n="displayUnitLabel">Display unit</span>
+          <div id="display-unit" class="seg" role="radiogroup" aria-label="Display unit" data-i18n-aria="displayUnitLabel">
+            <button type="button" role="radio" aria-checked="false" data-unit="mm">mm</button>
+            <button type="button" role="radio" aria-checked="false" data-unit="cm">cm</button>
+            <button type="button" role="radio" aria-checked="false" data-unit="m">m</button>
+            <button type="button" role="radio" aria-checked="false" data-unit="in">in</button>
+          </div>
+        </div>
+        <button id="clear-calibration-button" class="row" type="button" disabled data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          <span data-i18n="clearCalibrationButton">Clear calibration</span>
+        </button>
+        <button class="row" type="button" data-menu-tool="line" data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5" /><circle cx="5" cy="19" r="1.6" /><circle cx="19" cy="5" r="1.6" /></svg>
+          <span data-i18n="toolLine">Line</span>
+        </button>
+        <button class="row" type="button" data-menu-tool="repeat" data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></svg>
+          <span data-i18n="toolRepeat">Precision test</span>
+        </button>
+      </div>
+      <h2 data-i18n="menuSectionApp">App</h2>
+      <div class="rows">
+        <button id="protocol-button" class="row" type="button" data-closes-menu>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h9l3 3v11H6z" /></svg>
+          <span data-i18n="protocolButton">Protocol</span>
+        </button>
+        <button id="lang-button" class="row" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16" /></svg>
+          <span data-i18n="languageLabel">Language</span>
+          <span id="lang-value" class="value"></span>
+        </button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="protocol-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="protocolTitle1">Capture protocol</h2>
+    <ul>
+      <li data-i18n-html="protocolBullet1">Camera <strong>perpendicular</strong> to the plane of the gesture being measured — a tilted plane biases every angle by up to several degrees and shortens every length.</li>
+      <li data-i18n-html="protocolBullet2">Put the calibration reference <strong>in that same plane</strong>, at the subject's distance from the camera, not closer or farther.</li>
+      <li data-i18n-html="protocolBullet3">Keep a reasonable <strong>minimum distance</strong> from the subject — close-up shots exaggerate perspective error.</li>
+      <li data-i18n-html="protocolBullet4">Avoid the <strong>wide-angle</strong> lens/zoom level — wide angle increases perspective distortion at the frame edges.</li>
+    </ul>
+    <h2 data-i18n="protocolTitle2">What this measures, and what it doesn't</h2>
+    <p data-i18n-html="protocolIntro">angle-lab reads a <strong>projected</strong> angle and a <strong>scaled</strong> length off a single 2D photo. It does not reconstruct 3D geometry. Following the protocol above keeps the projection error small; it cannot remove it.</p>
+    <ul>
+      <li data-i18n-html="protocolBullet5"><strong>Angles</strong> are immune to distance/scale, but not to the gesture's plane being tilted relative to the camera: roughly up to 8&deg; of error at a 30&deg; tilt.</li>
+      <li data-i18n-html="protocolBullet6"><strong>Lengths</strong> need a correct scale (mm/px), which only holds in the plane of the calibration reference — a limb 30&nbsp;cm closer to or farther from the camera than that plane reads 20&ndash;38% off. A tilted (foreshortened) limb reads short: roughly 13% short at a 30&deg; tilt.</li>
+      <li data-i18n-html="protocolBullet7">The on-screen quality colour (green/amber/red) reflects <strong>placement precision</strong> only — how exactly the points were tapped, at what zoom. It does not know about, and cannot warn about, camera tilt or distance.</li>
+      <li data-i18n-html="protocolBullet8">angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.</li>
+    </ul>
+    <button id="protocol-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
+  </dialog>
+  <dialog id="guide-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="guideTitle">Measurement guides</h2>
+    <div id="guide-list-view">
+      <p class="export-hint" data-i18n="guideHint">
+        Pick a position. You get how to take the photo and which points to tap, in order.
+      </p>
+      <div id="guide-list"></div>
+    </div>
+    <div id="guide-detail" hidden></div>
+    <button id="guide-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
+  </dialog>
+  <dialog id="history-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="historyTitle">History</h2>
+    <p class="export-hint" data-i18n="historyHint">
+      Every project saved on this device, most recent first.
+    </p>
+    <div id="history-list"></div>
+    <button id="history-delete-all-button" class="bar-button danger-button" type="button" data-i18n="historyDeleteAllButton">Delete all projects</button>
+    <button id="history-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
+  </dialog>
+  <dialog id="label-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="labelDialogTitle">Name this measurement</h2>
+    <label class="label-field">
+      <span data-i18n="labelDialogField">Name</span>
+      <input id="label-input" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences" data-i18n-placeholder="labelDialogPlaceholder" placeholder="e.g. left knee" />
+    </label>
+    <div class="export-actions">
+      <button id="label-save-button" class="bar-button primary-button" type="button" data-i18n="labelSave">Save</button>
+      <button id="label-cancel-button" class="bar-button" type="button" data-i18n="calibrationCancel">Cancel</button>
+    </div>
+  </dialog>
+  <dialog id="export-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="exportTitle">Export</h2>
+    <p class="export-hint" data-i18n="exportHint">
+      Share the photo with its measurements written under it, or a table of the measurements.
+    </p>
+    <div class="export-fields">
+      <label><span data-i18n="exportSubjectCodeLabel">Subject code</span> <input id="export-subject-code" type="text" placeholder="ID-01" /></label>
+      <label><span data-i18n="exportDateLabel">Date</span> <input id="export-date" type="date" /></label>
+    </div>
+    <div id="export-readings"></div>
+    <p id="export-untagged-note" class="export-hint"></p>
+    <div class="export-actions">
+      <button id="export-png-button" class="bar-button" type="button" data-i18n="exportPngButton">Share photo (PNG)</button>
+      <button id="export-csv-button" class="bar-button" type="button" data-i18n="exportCsvButton">Share table (CSV)</button>
+      <button id="export-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
+    </div>
+  </dialog>
+  <script type="module" src="src/ui/app.js"></script>
+</body>
+</html>

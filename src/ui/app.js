@@ -1,9 +1,9 @@
 import { createViewport, fitImage, zoomAt, panBy, clampToBounds, clampToImage, recenterOnResize, viewToImage, viewToImageLength } from '../core/viewport.js';
 import { createHistory } from '../core/history.js';
 import { scaleChipState, projectChipInfo, describeReadout } from '../core/statusDisplay.js';
-import { isSafeReturnUrl } from '../core/returnUrl.js';
 import { describeHint } from '../core/hint.js';
-import { localDateISO, addDays } from '../core/dates.js';
+import { localDateISO } from '../core/dates.js';
+import { footerLines } from '../core/exportFooter.js';
 import { loadDisplayImage, decodeDisplayBitmap, MAX_DISPLAY_SIDE } from '../render/imageLoader.js';
 import { resizeCanvasBackingStore, renderFrame, renderMagnifierFrame } from '../render/canvasRenderer.js';
 import { attachPointerGestures } from './pointerGestures.js';
@@ -25,7 +25,7 @@ import {
   serialize,
   deserialize,
   setSubjectCode,
-  setMeasurementTag,
+  setMeasurementLabel,
   setActiveImage,
   removeImage,
   countImageContents,
@@ -34,7 +34,7 @@ import { evaluateSegment, evaluateAngle, evaluateDistance } from '../core/measur
 import { hitTest } from '../core/hittest.js';
 import { repeatabilityStats, decimalsForSigma } from '../core/uncertainty.js';
 import { nextLandmark, isGuideComplete, applyGuide } from '../core/guides.js';
-import { GUIDES } from '../export/guides.js';
+import { GUIDES, GUIDES_WITH_EXTRA } from '../export/guides.js';
 import { millimetresPerPixel, pixelsToReal, isCalibrated } from '../core/calibration.js';
 import { formatLength, formatAngle } from '../core/units.js';
 import {
@@ -53,9 +53,7 @@ import {
   estimateStorageRatio,
   STORAGE_WARNING_RATIO,
 } from '../storage/db.js';
-import { readingsForImage, buildExportCsv, resolveTaggedReading } from '../export/csvExport.js';
-import { testLabelsForKind, metricsForKind } from '../export/catalogRef.js';
-import { resolveAquamadTag, AQUAMAD_SEASON_END } from '../export/batteryTags.js';
+import { readingsForImage, buildExportCsv } from '../export/csvExport.js';
 import { t, getLang, setLang } from '../i18n/strings.js';
 
 const TOUCH_RADIUS_CSS_PX = 22;
@@ -126,20 +124,18 @@ const historyList = document.getElementById('history-list');
 const historyDeleteAllButton = document.getElementById('history-delete-all-button');
 const errorBar = document.getElementById('error-bar');
 const storageBar = document.getElementById('storage-bar');
-const seasonBar = document.getElementById('season-bar');
-const seasonBarText = document.getElementById('season-bar-text');
-const seasonPurgeButton = document.getElementById('season-purge-button');
-const seasonSnoozeButton = document.getElementById('season-snooze-button');
-const returnBar = document.getElementById('return-bar');
-const returnBarText = document.getElementById('return-bar-text');
-const returnBarButton = document.getElementById('return-bar-button');
+const labelButton = document.getElementById('label-button');
+const labelDialog = document.getElementById('label-dialog');
+const labelInput = document.getElementById('label-input');
+const labelSaveButton = document.getElementById('label-save-button');
+const labelCancelButton = document.getElementById('label-cancel-button');
+const guideListView = document.getElementById('guide-list-view');
+const guideDetail = document.getElementById('guide-detail');
 const exportButton = document.getElementById('export-button');
 const exportDialog = document.getElementById('export-dialog');
 const exportCloseButton = document.getElementById('export-close-button');
 const exportSubjectCodeInput = document.getElementById('export-subject-code');
-const exportCategorySelect = document.getElementById('export-category');
 const exportDateInput = document.getElementById('export-date');
-const exportEvaluatorInput = document.getElementById('export-evaluator');
 const exportReadingsContainer = document.getElementById('export-readings');
 const exportUntaggedNote = document.getElementById('export-untagged-note');
 const exportPngButton = document.getElementById('export-png-button');
@@ -159,8 +155,7 @@ const calibrationConfirmButton = document.getElementById('calibration-confirm');
 const calibrationCancelButton = document.getElementById('calibration-cancel');
 
 // LOTE 5 §5: fills every [data-i18n]/[data-i18n-html] node from the current language's table —
-// same pattern dryland-test-logger's own applyStrings() already uses (app.js there), kept as a
-// separate implementation on purpose (LOTE 3 §1). Runs once at boot and again on every language
+// one table per language (src/i18n/strings.js). Runs once at boot and again on every language
 // switch; nothing here depends on which project or photo is open.
 function applyStrings() {
   document.title = t('pageTitle');
@@ -168,6 +163,7 @@ function applyStrings() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
   for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
   langValue.textContent = t('langButton');
 }
 
@@ -182,7 +178,6 @@ langButton.addEventListener('click', () => {
   scheduleRender();
   if (exportDialog.open) renderExportReadings();
   if (historyDialog.open) renderHistoryList();
-  if (!seasonBar.hidden) checkSeasonBanner();
 });
 
 applyStrings();
@@ -191,30 +186,6 @@ applyStrings();
 // guarantee — no ground truth here, just the physics of a single photo.
 protocolButton.addEventListener('click', () => protocolDialog.showModal());
 protocolCloseButton.addEventListener('click', () => protocolDialog.close());
-
-// LOTE 5 §4: the bridge from dryland-test-logger's "Analizar en angle-lab" button.
-// ?subject=<código>&guide=<guideId>&metric=<planKey>&return=<url volver a seco>. guideId is
-// literally a battery test.id and planKey literally a metric.csv (comprobado contra
-// battery-aquamad.js, no supuesto) — see dryland-test-logger/app.js's angleLabUrl. Read once at
-// boot and the URL cleaned right after, so a reload mid-session never re-triggers it.
-const returnContext = (() => {
-  const params = new URLSearchParams(location.search);
-  const returnUrl = params.get('return');
-  if (!returnUrl) return null;
-  // The value is navigated to from the "Send to seco" button: only same-origin or localhost URLs.
-  if (!isSafeReturnUrl(returnUrl, location.origin)) return null;
-  return {
-    subjectCode: params.get('subject') || '',
-    guideId: params.get('guide') || '',
-    metric: params.get('metric') || '',
-    returnUrl,
-  };
-})();
-if (returnContext) {
-  const clean = new URL(location.href);
-  clean.search = '';
-  history.replaceState(null, '', clean.toString());
-}
 
 let image = null;
 let viewport = createViewport();
@@ -299,66 +270,8 @@ async function checkStorageHealth() {
   storageBar.textContent = t('storageWarning', { pct: Math.round(ratio * 100) });
 }
 
-// LOTE 5 §6: mirrors dryland-test-logger's own season banner (app.js there) — same club, same
-// AQUAMAD_SEASON_END (batteryTags.js), same policy: never purges on its own, only lights the
-// warning until an explicit "Delete" or "Remind me later" click. The snooze date lives in
-// localStorage (same tolerance-for-loss as the language preference above) since this app has no
-// single settings row the way dryland-test-logger's `db` object does.
-const SEASON_SNOOZE_KEY = 'angle-lab/seasonPurgeSnoozeUntil';
-
-function seasonEnded() {
-  return localDateISO() > AQUAMAD_SEASON_END;
-}
-
-function getSeasonSnoozeUntil() {
-  try {
-    return localStorage.getItem(SEASON_SNOOZE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function setSeasonSnoozeUntil(dateISO) {
-  try {
-    localStorage.setItem(SEASON_SNOOZE_KEY, dateISO);
-  } catch {
-    // Losing the snooze just means the banner reappears sooner than intended — not worth
-    // throwing into a caller with no recovery path, same rule as everywhere else here.
-  }
-}
-
-async function checkSeasonBanner() {
-  const snoozedUntil = getSeasonSnoozeUntil();
-  if (!seasonEnded() || (snoozedUntil && snoozedUntil >= localDateISO())) {
-    seasonBar.hidden = true;
-    return;
-  }
-  seasonBar.hidden = false;
-  seasonBarText.textContent = t('seasonEndedBanner', { end: AQUAMAD_SEASON_END });
-}
-
-seasonPurgeButton.addEventListener('click', async () => {
-  const projects = await listProjects();
-  if (!confirm(t('seasonPurgeConfirm', { n: projects.length }))) return;
-  cancelPendingSave();
-  await clearAll();
-  resetEditingState();
-  project = createProject();
-  await setActiveProjectId(project.id);
-  storageBar.hidden = true;
-  seasonBar.hidden = true;
-  scheduleRender();
-  if (historyDialog.open) renderHistoryList();
-});
-
-seasonSnoozeButton.addEventListener('click', () => {
-  setSeasonSnoozeUntil(localDateISO(addDays(new Date(), 30)));
-  seasonBar.hidden = true;
-});
-
-// Debounced autosave, flushed synchronously on backgrounding — same shape as
-// dryland-test-logger's LOTE 1 §1 fix, for the same reason: waiting out a
-// debounce risks losing the last edits if iOS kills the tab while hidden.
+// Debounced autosave, flushed synchronously on backgrounding: waiting out the debounce risks
+// losing the last edits if iOS kills the tab while hidden.
 const SAVE_DEBOUNCE_MS = 400;
 let saveTimer = null;
 let pendingSaveData = null;
@@ -583,7 +496,7 @@ function updateReadout() {
   const info = describeReadout(readings.find((r) => r.id === selectedEntityId));
   readoutElement.hidden = !info;
   if (!info) return;
-  readoutLabel.textContent = t(info.labelKey);
+  readoutLabel.textContent = info.name ? `${t(info.labelKey)} · ${info.name}` : t(info.labelKey);
   readoutValue.textContent = info.value;
   readoutDot.dataset.level = info.level;
   readoutMeta.textContent = [info.sigmaText, t(info.qualityKey)].filter(Boolean).join(' · ');
@@ -647,6 +560,8 @@ function updateStatusLayers() {
   fitButton.hidden = !image;
   fitButton.textContent = `${Math.round(viewport.scale * 100)} %`;
   selectionBar.hidden = !selectedEntityId;
+  // Only an angle or a distance can be named.
+  labelButton.hidden = selectedEntityType !== 'angle' && selectedEntityType !== 'distance';
   canvasArea.classList.toggle('has-selection', !!selectedEntityId);
 }
 
@@ -667,7 +582,6 @@ function scheduleRender() {
     }, 1, canvasTheme);
     updateReadout();
     updateCalibrationControls();
-    updateReturnBar();
     updateHint();
     updateStatusLayers();
     deleteButton.disabled = !selectedEntityId;
@@ -802,12 +716,12 @@ function updateHint() {
         const landmark = nextLandmark(activeGuide, placedIds);
         text = landmark
           ? t('guideReadoutWaiting', {
-              guide: activeGuide.label,
-              landmark: landmark.label,
+              guide: guideName(activeGuide),
+              landmark: landmarkName(landmark),
               n: placedLandmarks.length + 1,
               total: activeGuide.landmarks.length,
             })
-          : t('guideReadoutDone', { guide: activeGuide.label });
+          : t('guideReadoutDone', { guide: guideName(activeGuide) });
       }
     } else if (mode === 'repeat') {
       const message = repeatHint || { key: 'repeatTapMoreMany', params: { n: REPEATABILITY_TAP_COUNT } };
@@ -835,36 +749,19 @@ hintCancelButton.addEventListener('click', () => {
   scheduleRender();
 });
 
-// LOTE 5 §4: shows only once the exact (test, metric) dryland-test-logger asked for is a
-// tagged reading on the photo now open — never earlier, and never for a different pair a guide
-// with more than one metric (puente) might also have produced. Clicking it is the one explicit
-// step that actually navigates back — never automatic, so the number gets a look first.
-function updateReturnBar() {
-  if (!returnContext || !image || !project.activeImageId) {
-    returnBar.hidden = true;
-    return;
-  }
-  const match = readingsForImage(project, project.activeImageId)
-    .map(resolveTaggedReading)
-    .find((r) => r && r.test === returnContext.guideId && r.metric === returnContext.metric);
-  if (!match) {
-    returnBar.hidden = true;
-    return;
-  }
-  returnBar.hidden = false;
-  returnBarText.textContent = t('returnBarText', {
-    subject: returnContext.subjectCode || t('historyCodePlaceholder'),
-    test: match.test,
-    metric: match.metric,
-    value: match.value,
-    unit: match.unit,
-  });
-  returnBarButton.onclick = () => {
-    const target = new URL(returnContext.returnUrl);
-    target.searchParams.set('value', match.value);
-    target.searchParams.set('unit', match.unit);
-    location.href = target.toString();
-  };
+// LOTE 7: the measurement guides. Texts come from strings.js by key (guide.<id>, landmark.<id>,
+// measure.<key>); src/export/guides.js is data only.
+function guideName(guide) {
+  return t(`guide.${guide.id}`);
+}
+
+function landmarkName(landmark) {
+  return t(`landmark.${landmark.id}`);
+}
+
+function showGuideList() {
+  guideListView.hidden = false;
+  guideDetail.hidden = true;
 }
 
 function renderGuideList() {
@@ -877,20 +774,89 @@ function renderGuideList() {
     const button = document.createElement('button');
     button.className = 'bar-button';
     button.type = 'button';
-    button.textContent = t('guideListItem', { label: guide.label, count: guide.landmarks.length });
-    button.disabled = !image || !project.activeImageId;
-    button.addEventListener('click', () => {
-      guideDialog.close();
-      setMode('guide', guide);
-    });
+    button.textContent = t('guideListItem', { label: guideName(guide), count: guide.landmarks.length });
+    button.addEventListener('click', () => showGuideDetail(guide));
     guideListContainer.appendChild(button);
   }
 }
 
-guideButton.addEventListener('click', () => {
+// One guide: how to take the photo, the points in order with where each one is, what comes out,
+// and the optional extra angle. "Start" begins tapping the points on the open photo.
+function showGuideDetail(guide) {
+  guideDetail.replaceChildren();
+  const addText = (tag, text, className) => {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    guideDetail.appendChild(el);
+    return el;
+  };
+
+  addText('h3', guideName(guide), 'guide-detail-title');
+  addText('h4', t('guideDetailCamera'));
+  addText('p', t(`guide.${guide.id}.camera`));
+
+  addText('h4', t('guideDetailPoints'));
+  const points = document.createElement('ol');
+  points.className = 'guide-points';
+  for (const landmark of guide.landmarks) {
+    const item = document.createElement('li');
+    const name = document.createElement('strong');
+    name.textContent = landmarkName(landmark);
+    item.append(name, document.createTextNode(` — ${t(`landmark.${landmark.id}.where`)}`));
+    points.appendChild(item);
+  }
+  guideDetail.appendChild(points);
+
+  addText('h4', t('guideDetailResult'));
+  const results = document.createElement('ul');
+  results.className = 'guide-points';
+  for (const plan of guide.plans) {
+    const item = document.createElement('li');
+    item.textContent = t(`measure.${plan.key}`);
+    results.appendChild(item);
+  }
+  guideDetail.appendChild(results);
+  addText('p', t(`guide.${guide.id}.read`));
+
+  if (GUIDES_WITH_EXTRA.includes(guide.id)) {
+    addText('h4', t('guideDetailExtra'));
+    addText('p', t(`guide.${guide.id}.extra`));
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'export-actions';
+  const start = document.createElement('button');
+  start.type = 'button';
+  start.className = 'bar-button primary-button';
+  start.textContent = t('guideStartButton');
+  start.disabled = !image || !project.activeImageId;
+  start.addEventListener('click', () => {
+    guideDialog.close();
+    setMode('guide', guide);
+  });
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'bar-button';
+  back.textContent = t('guideBackButton');
+  back.addEventListener('click', showGuideList);
+  actions.append(start, back);
+  guideDetail.appendChild(actions);
+
+  guideListView.hidden = true;
+  guideDetail.hidden = false;
+}
+
+function renderGuideDialog() {
   renderGuideList();
+  showGuideList();
+}
+
+guideButton.addEventListener('click', () => {
+  renderGuideDialog();
   guideDialog.showModal();
 });
+guideCloseButton.addEventListener('click', () => guideDialog.close());
 guideCloseButton.addEventListener('click', () => guideDialog.close());
 
 // LOTE 4 §1-2: menu sheet. The menu button and the project chip open it; ✕, a tap on the backdrop
@@ -1115,6 +1081,42 @@ function deleteSelected() {
 }
 
 deleteButton.addEventListener('click', deleteSelected);
+
+// LOTE 7: naming the selected angle or distance ("left knee"). The name shows in the floating
+// readout, in the export rows, in the CSV and in the strip under the exported photo.
+function selectedMeasurement() {
+  if (selectedEntityType !== 'angle' && selectedEntityType !== 'distance') return null;
+  return project.measurements.find((m) => m.id === selectedEntityId) || null;
+}
+
+labelButton.addEventListener('click', () => {
+  const measurement = selectedMeasurement();
+  if (!measurement) return;
+  labelInput.value = measurement.label || '';
+  labelDialog.showModal();
+  labelInput.focus();
+  labelInput.select();
+});
+
+function saveLabel() {
+  const measurement = selectedMeasurement();
+  if (measurement && labelInput.value.trim() !== (measurement.label || '')) {
+    editHistory.push(serialize(project));
+    setMeasurementLabel(project, measurement.id, labelInput.value);
+    scheduleSave();
+    scheduleRender();
+  }
+  labelDialog.close();
+}
+
+labelSaveButton.addEventListener('click', saveLabel);
+labelCancelButton.addEventListener('click', () => labelDialog.close());
+labelInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    saveLabel();
+  }
+});
 
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Delete' && event.key !== 'Backspace') return;
@@ -1384,7 +1386,7 @@ function onPointClaim(viewPoint, event) {
       x: placePoint.x,
       y: placePoint.y,
       placementScale: viewport.scale,
-      label: landmark.label,
+      label: landmarkName(landmark),
       landmark: landmark.id,
     });
     placedLandmarks.push({ landmarkId: landmark.id, pointId: created.id });
@@ -1394,10 +1396,11 @@ function onPointClaim(viewPoint, event) {
     justCreatedGuideMeasurementIds = [];
     if (isGuideComplete(activeGuide, placedLandmarks.map((p) => p.landmarkId))) {
       const pointIdByLandmark = Object.fromEntries(placedLandmarks.map((p) => [p.landmarkId, p.pointId]));
-      // resolveAquamadTag is Daniel's own battery mapping, not a hard-wired part of the guide
-      // engine — see src/export/batteryTags.js. A commercial build with a different battery, or
-      // none, passes a different resolver (or none) here; nothing else in this file changes.
-      const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark, resolveAquamadTag);
+      // Each measurement the guide builds is named after the plan ("Shoulder angle"), in the
+      // language in use now.
+      const { created: builtMeasurements } = applyGuide(project, activeGuide, pointIdByLandmark, (plan) =>
+        t(`measure.${plan.key}`),
+      );
       justCreatedGuideMeasurementIds = builtMeasurements.map((m) => m.id);
     }
     updateHint();
@@ -1741,11 +1744,8 @@ historyDeleteAllButton.addEventListener('click', async () => {
   renderHistoryList();
 });
 
-// Same shape as dryland-test-logger/app.js's own shareFile: native share
-// sheet first (so "Save to Files" can drop it straight into the
-// OneDrive-synced folder, the same route seco's CSV already takes), a
-// download-link fallback otherwise. Duplicated rather than shared — the two
-// apps' bundles are independent by design (LOTE 3 §1).
+// Native share sheet first (so "Save to Files" works on a phone), a download-link fallback
+// otherwise.
 async function shareFile(name, content, mime) {
   const file = new File([content], name, { type: mime });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1767,26 +1767,14 @@ async function shareFile(name, content, mime) {
   return true;
 }
 
-// LOTE 3 §6: one row per angle/distance on the active image, with a Test
-// and Metric <select> pair (catalogRef.js's curated list, filtered to that
-// reading's own kind — an angle can only be tagged with a 'grados' metric,
-// a distance only with a 'cm' one) so untagged readings stay obviously
-// untagged rather than silently exportable as blank rows.
 // 'good' | 'ok' | 'poor' from core/uncertainty.js — a fixed, small vocabulary, so a lookup here
 // is simpler than threading translation through the core module that computes it.
 function qualityWord(level) {
   return t(level === 'good' ? 'qualityGood' : level === 'ok' ? 'qualityOk' : 'qualityPoor');
 }
 
-function updateUntaggedNote() {
-  if (!image || !project.activeImageId) return;
-  const readings = readingsForImage(project, project.activeImageId);
-  const taggedCount = readings.filter((r) => r.tag).length;
-  exportUntaggedNote.textContent = readings.length
-    ? t('exportTaggedCount', { tagged: taggedCount, total: readings.length })
-    : t('exportNoMeasurements');
-}
-
+// One row per angle/distance on the open photo: what it reads, and a field to give it a name
+// (the same name the Label button sets, and the one the CSV and the exported photo carry).
 function renderExportReadings() {
   exportReadingsContainer.innerHTML = '';
   if (!image || !project.activeImageId) {
@@ -1794,6 +1782,7 @@ function renderExportReadings() {
     return;
   }
   const readings = readingsForImage(project, project.activeImageId);
+  exportUntaggedNote.textContent = readings.length ? '' : t('exportNoMeasurements');
 
   for (const r of readings) {
     const row = document.createElement('div');
@@ -1812,49 +1801,25 @@ function renderExportReadings() {
       label.textContent = t('exportReadingDistance', { value: realText, quality: qualityWord(r.quality.level) });
     }
 
-    const testSelect = document.createElement('select');
-    testSelect.appendChild(new Option(t('exportUntaggedOption'), ''));
-    for (const { test, testLabel } of testLabelsForKind(r.type)) {
-      testSelect.appendChild(new Option(testLabel, test));
-    }
-    testSelect.value = r.tag?.test || '';
-
-    const metricSelect = document.createElement('select');
-    function rebuildMetricOptions(selectedTest) {
-      metricSelect.innerHTML = '';
-      metricSelect.appendChild(new Option('—', ''));
-      for (const m of metricsForKind(r.type).filter((entry) => entry.test === selectedTest)) {
-        metricSelect.appendChild(new Option(m.metricLabel, m.metric));
-      }
-    }
-    rebuildMetricOptions(testSelect.value);
-    metricSelect.value = r.tag?.metric || '';
-    metricSelect.disabled = !testSelect.value;
-
-    function applyTag() {
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'export-name-input';
+    nameInput.maxLength = 60;
+    nameInput.value = r.name;
+    nameInput.placeholder = t('exportNamePlaceholder');
+    nameInput.setAttribute('aria-label', t('exportNameLabel'));
+    nameInput.addEventListener('change', () => {
+      if (nameInput.value.trim() === r.name) return;
       editHistory.push(serialize(project));
-      if (testSelect.value && metricSelect.value) {
-        setMeasurementTag(project, r.id, { test: testSelect.value, metric: metricSelect.value });
-      } else {
-        setMeasurementTag(project, r.id, null);
-      }
+      setMeasurementLabel(project, r.id, nameInput.value);
+      r.name = nameInput.value.trim();
       scheduleSave();
-      updateUntaggedNote();
-    }
-
-    testSelect.addEventListener('change', () => {
-      rebuildMetricOptions(testSelect.value);
-      metricSelect.value = '';
-      metricSelect.disabled = !testSelect.value;
-      applyTag();
+      scheduleRender();
     });
-    metricSelect.addEventListener('change', applyTag);
 
-    row.append(label, testSelect, metricSelect);
+    row.append(label, nameInput);
     exportReadingsContainer.appendChild(row);
   }
-
-  updateUntaggedNote();
 }
 
 exportButton.addEventListener('click', () => {
@@ -1871,16 +1836,58 @@ exportSubjectCodeInput.addEventListener('change', () => {
   scheduleSave();
 });
 
+// Lines, size and drawing of the strip under an exported photo. The text itself comes from
+// core/exportFooter.js; this only measures and paints it, scaled with the marks (`k`).
+function buildFooter(photoWidth, k) {
+  const readings = image && project.activeImageId ? readingsForImage(project, project.activeImageId) : [];
+  const counters = { angle: 0, distance: 0 };
+  const items = readings.map((r) => {
+    counters[r.type] += 1;
+    const fallback = `${t(r.type === 'angle' ? 'wordAngle' : 'wordDistance')} ${counters[r.type]}`;
+    return { name: r.name || fallback, value: describeReadout(r).value };
+  });
+  const lines = footerLines({
+    subjectCode: exportSubjectCodeInput.value.trim(),
+    date: exportDateInput.value || localDateISO(),
+    items,
+    disclaimer: t('footerDisclaimer'),
+    more: (n) => t('footerMore', { n }),
+  });
+  const font = 14 * k;
+  const lineHeight = Math.round(font * 1.55);
+  const pad = Math.round(font * 0.9);
+  return {
+    height: Math.round(pad * 2 + lines.length * lineHeight),
+    draw(c, top) {
+      c.save();
+      c.fillStyle = '#0B0E13';
+      c.fillRect(0, top, photoWidth, Math.round(pad * 2 + lines.length * lineHeight));
+      c.textBaseline = 'middle';
+      c.textAlign = 'left';
+      const maxWidth = photoWidth - 2 * pad;
+      lines.forEach((line, index) => {
+        const isHeader = index === 0;
+        const isDisclaimer = index === lines.length - 1;
+        c.font = `${isHeader ? 600 : 500} ${isDisclaimer ? font * 0.85 : font}px ui-monospace, "SF Mono", Menlo, monospace`;
+        c.fillStyle = isDisclaimer ? '#9AA6B4' : '#E9EDF3';
+        let text = line;
+        while (text.length > 1 && c.measureText(text).width > maxWidth) text = `${text.slice(0, -2)}…`;
+        c.fillText(text, pad, top + pad + index * lineHeight + lineHeight / 2);
+      });
+      c.restore();
+    },
+  };
+}
+
 exportCsvButton.addEventListener('click', async () => {
   if (!image || !project.activeImageId) return;
   const readings = readingsForImage(project, project.activeImageId);
-  const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
+  const subjectCode = exportSubjectCodeInput.value.trim() || 'no-code';
   const date = exportDateInput.value || localDateISO();
   const csv = buildExportCsv(readings, {
     date,
-    subjectCode,
-    category: exportCategorySelect.value,
-    evaluator: exportEvaluatorInput.value.trim() || 'DJ',
+    subjectCode: exportSubjectCodeInput.value.trim(),
+    photoNumber: projectChipInfo(project).photoNumber,
   });
   await shareFile(`${subjectCode}_${date}_angle-lab.csv`, csv, 'text/csv');
 });
@@ -1900,15 +1907,20 @@ exportPngButton.addEventListener('click', async () => {
     }
   }
   const exportScale = bitmap.width / image.imageSize.width;
-  const offscreen = document.createElement('canvas');
-  offscreen.width = Math.max(1, Math.round(image.imageSize.width * exportScale));
-  offscreen.height = Math.max(1, Math.round(image.imageSize.height * exportScale));
-  const offCtx = offscreen.getContext('2d');
-  const exportViewport = { scale: exportScale, tx: 0, ty: 0, rotation: 0 };
+  const photoWidth = Math.max(1, Math.round(image.imageSize.width * exportScale));
+  const photoHeight = Math.max(1, Math.round(image.imageSize.height * exportScale));
   // Marks are sized in screen px; on a multi-thousand-px export they would be microscopic, so they
   // grow with the image (400 px of the shorter side = the on-screen size).
-  const overlayScale = Math.max(1, Math.min(offscreen.width, offscreen.height) / 400);
-  renderFrame(offCtx, 1, { width: offscreen.width, height: offscreen.height }, exportViewport, { ...image, displayBitmap: bitmap }, {
+  const overlayScale = Math.max(1, Math.min(photoWidth, photoHeight) / 400);
+  // LOTE 7: a strip under the photo with the subject code, the date, each measurement with its
+  // name and value, and the projection disclaimer.
+  const footer = buildFooter(photoWidth, overlayScale);
+  const offscreen = document.createElement('canvas');
+  offscreen.width = photoWidth;
+  offscreen.height = photoHeight + footer.height;
+  const offCtx = offscreen.getContext('2d');
+  const exportViewport = { scale: exportScale, tx: 0, ty: 0, rotation: 0 };
+  renderFrame(offCtx, 1, { width: photoWidth, height: photoHeight }, exportViewport, { ...image, displayBitmap: bitmap }, {
     points: activePoints(),
     // No selection ring / pending markers in the exported photo — those are
     // editing-session state, not part of the analysis being shared.
@@ -1920,6 +1932,7 @@ exportPngButton.addEventListener('click', async () => {
     distances: activeDistances(),
     calibration: calibrationOverlay(),
   }, overlayScale, canvasTheme);
+  footer.draw(offCtx, photoHeight);
   if (decodedFresh) bitmap.close();
   const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));
   // toBlob hands back null when it cannot encode (canvas too large, memory): sharing that would
@@ -1928,7 +1941,7 @@ exportPngButton.addEventListener('click', async () => {
     showError(t('exportFailed'));
     return;
   }
-  const subjectCode = exportSubjectCodeInput.value.trim() || 'sin-codigo';
+  const subjectCode = exportSubjectCodeInput.value.trim() || 'no-code';
   const date = exportDateInput.value || localDateISO();
   await shareFile(`${subjectCode}_${date}_angle-lab.png`, blob, 'image/png');
 });
@@ -1979,25 +1992,9 @@ async function restoreProject() {
   await loadImageForActiveProject();
 }
 
-// LOTE 5 §4: applied after restoreProject, not before — the incoming subject code and guide
-// are for the project that ends up open (restored or, if none existed, the blank one created at
-// module load), never overwritten a moment later by the restore itself.
-function applyReturnContextOnBoot() {
-  if (!returnContext) return;
-  if (returnContext.subjectCode) {
-    setSubjectCode(project, returnContext.subjectCode);
-    scheduleSave();
-  }
-  const guide = GUIDES.find((g) => g.id === returnContext.guideId);
-  if (guide) setMode('guide', guide);
-  scheduleRender();
-}
-
 requestPersistence();
 restoreProject().then(() => {
-  applyReturnContextOnBoot();
   checkStorageHealth();
-  checkSeasonBanner();
 });
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

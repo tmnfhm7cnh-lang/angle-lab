@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when any file below changes. */
-const CACHE = 'angle-lab-v22';
+const CACHE = 'angle-lab-v23';
 
 /* Without these the app does not run: if one is missing the install must fail loudly. */
 const CORE = [
@@ -12,12 +12,12 @@ const CORE = [
   'src/core/calibration.js',
   'src/core/hittest.js',
   'src/core/viewport.js',
-  'src/core/returnUrl.js',
   'src/core/dates.js',
   'src/core/hint.js',
   'src/core/history.js',
   'src/core/statusDisplay.js',
   'src/core/labelPlacement.js',
+  'src/core/exportFooter.js',
   'src/core/units.js',
   'src/core/uncertainty.js',
   'src/core/measurements.js',
@@ -26,17 +26,14 @@ const CORE = [
   'src/render/canvasRenderer.js',
   'src/render/imageLoader.js',
   'src/storage/db.js',
-  'src/export/catalogRef.js',
   'src/export/csvExport.js',
   'src/export/guides.js',
-  'src/export/batteryTags.js',
   'src/styles/tokens.css',
   'src/styles/app.css',
 ];
-/* Cosmetic. A missing icon must never cost the offline cache — same bug
-   dryland-test-logger had from 2026-08-07 to 2026-08-21: addAll rejects on
-   a single 404 and the install never completes. */
-const EXTRAS = ['manifest.webmanifest', 'icon.svg', 'icon-180.png'];
+/* Cosmetic. A missing icon must never cost the offline cache: addAll rejects on a single 404 and
+   the install never completes. */
+const EXTRAS = ['manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -46,9 +43,8 @@ self.addEventListener('install', (e) => {
   );
 });
 
-/* Only delete OUR OWN old cache generations — dryland-test-logger shares
-   this origin (tmnfhm7cnh-lang.github.io) and has its own cache name; see
-   its sw.js for the matching half of this fix (LOTE 3 audit). */
+/* Only delete OUR OWN old cache generations: other apps can be hosted on this same origin, each
+   with its own cache name. */
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()

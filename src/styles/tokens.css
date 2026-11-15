@@ -1,8 +1,5 @@
-/* LOTE 4 — design-system.md §2. Imported before app.css. Shared skeleton
-   with dryland-test-logger (which carries its own copy plus the
-   [data-app="dryland"] override block — the two apps deploy to independent
-   repos, so this file is duplicated on purpose, same precedent as
-   src/export/catalogRef.js). */
+/* LOTE 4 — design-system.md §2. Imported before app.css: every colour, size and radius the
+   app uses, so a theme change is a change to this file only. */
 :root{
   color-scheme: dark light;
 

@@ -22,7 +22,7 @@ import {
   serialize,
   deserialize,
   setSubjectCode,
-  setMeasurementTag,
+  setMeasurementLabel,
   setActiveImage,
   removeImage,
   countImageContents,
@@ -320,7 +320,7 @@ describe('setSubjectCode', () => {
   });
 });
 
-describe('setMeasurementTag', () => {
+describe('setMeasurementLabel', () => {
   function projectWithAngle() {
     const { project, image } = projectWithImage();
     const a = addPoint(project, { imageId: image.id, x: 0, y: 0 });
@@ -330,30 +330,38 @@ describe('setMeasurementTag', () => {
     return { project, angle };
   }
 
-  test('tags a measurement with a test/metric pair', () => {
+  test('names a measurement; the text is trimmed', () => {
     const { project, angle } = projectWithAngle();
-    assert.equal(setMeasurementTag(project, angle.id, { test: 'puente', metric: 'desviacion_brazo' }), true);
-    const stored = project.measurements.find((m) => m.id === angle.id);
-    assert.deepEqual(stored.tag, { test: 'puente', metric: 'desviacion_brazo' });
+    assert.equal(setMeasurementLabel(project, angle.id, '  left knee  '), true);
+    assert.equal(project.measurements.find((m) => m.id === angle.id).label, 'left knee');
   });
 
-  test('null clears an existing tag', () => {
+  test('an empty or blank name clears it (the field is removed, not left empty)', () => {
     const { project, angle } = projectWithAngle();
-    setMeasurementTag(project, angle.id, { test: 'puente', metric: 'desviacion_brazo' });
-    assert.equal(setMeasurementTag(project, angle.id, null), true);
-    const stored = project.measurements.find((m) => m.id === angle.id);
-    assert.equal('tag' in stored, false);
+    setMeasurementLabel(project, angle.id, 'left knee');
+    assert.equal(setMeasurementLabel(project, angle.id, '   '), true);
+    assert.equal('label' in project.measurements.find((m) => m.id === angle.id), false);
   });
 
-  test('rejects an unknown measurement id', () => {
-    const { project } = projectWithAngle();
-    assert.equal(setMeasurementTag(project, 'not-an-id', { test: 'puente', metric: 'x' }), false);
+  test('a very long name is cut to 60 characters', () => {
+    const { project, angle } = projectWithAngle();
+    setMeasurementLabel(project, angle.id, 'x'.repeat(200));
+    assert.equal(project.measurements.find((m) => m.id === angle.id).label.length, 60);
   });
 
-  test('rejects a malformed tag', () => {
+  test('rejects an unknown measurement id and a non-string name', () => {
     const { project, angle } = projectWithAngle();
-    assert.equal(setMeasurementTag(project, angle.id, { test: 'puente' }), false);
-    assert.equal(setMeasurementTag(project, angle.id, {}), false);
+    assert.equal(setMeasurementLabel(project, 'not-an-id', 'x'), false);
+    assert.equal(setMeasurementLabel(project, angle.id, 5), false);
+    assert.equal('label' in project.measurements.find((m) => m.id === angle.id), false);
+  });
+
+  test('survives serialize and deserialize with no schema bump', () => {
+    const { project, angle } = projectWithAngle();
+    setMeasurementLabel(project, angle.id, 'left knee');
+    const back = deserialize(serialize(project));
+    assert.equal(back.measurements.find((m) => m.id === angle.id).label, 'left knee');
+    assert.equal(back.schemaVersion, SCHEMA_VERSION);
   });
 });
 

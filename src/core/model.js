@@ -215,22 +215,19 @@ export function addDistance(project, aId, bId) {
   return measurement;
 }
 
-// LOTE 3 §6: which dryland-test-logger catalogue entry (prueba/métrica) this
-// angle or distance fulfils — the piece of information the CSV export needs
-// that nothing in the geometry itself can supply. An optional field, added
-// without a schema bump (same precedent as displayUnit/calibrations before
-// it and placementScale on points): a measurement with no tag is simply
-// unassigned, not on an old version of anything.
-export function setMeasurementTag(project, measurementId, tag) {
+// LOTE 7: the name the user gives an angle or a distance ("left knee"). An optional field, added
+// without a schema bump (same precedent as displayUnit/calibrations and placementScale on
+// points): a measurement without one is simply unnamed. Trimmed and cut to MAX_LABEL_LENGTH; an
+// empty name removes the field rather than leaving an empty string behind.
+export const MAX_LABEL_LENGTH = 60;
+
+export function setMeasurementLabel(project, measurementId, label) {
   const measurement = project.measurements.find((m) => m.id === measurementId);
   if (!measurement) return false;
-  if (tag === null) {
-    delete measurement.tag;
-    touch(project);
-    return true;
-  }
-  if (!tag || typeof tag.test !== 'string' || typeof tag.metric !== 'string') return false;
-  measurement.tag = { test: tag.test, metric: tag.metric };
+  if (typeof label !== 'string') return false;
+  const clean = label.trim().slice(0, MAX_LABEL_LENGTH).trim();
+  if (clean === '') delete measurement.label;
+  else measurement.label = clean;
   touch(project);
   return true;
 }

@@ -38,6 +38,7 @@ export function describeReadout(reading) {
     const decimals = decimalsForSigma(reading.sigmaDegrees);
     return {
       labelKey: 'wordAngle',
+      name: reading.name || '',
       value: formatAngle(reading.degrees, decimals),
       sigmaText: Number.isFinite(reading.sigmaDegrees) ? `±${reading.sigmaDegrees.toFixed(decimals)}°` : '',
       qualityKey,
@@ -50,6 +51,7 @@ export function describeReadout(reading) {
   const unit = calibrated ? reading.unit : 'px';
   return {
     labelKey: 'wordDistance',
+    name: reading.name || '',
     value: calibrated ? formatLength(reading.real, reading.unit, decimals) : `${reading.pixels.toFixed(1)} px`,
     sigmaText: Number.isFinite(reading.sigma) ? `±${reading.sigma.toFixed(decimals)} ${unit}` : '',
     qualityKey,

@@ -1,15 +1,11 @@
 /**
  * LOTE 5 §5 of the prompt maestro: angle-lab's own UI chrome, bilingual (en/es) — decided
  * 2026-09-29 with Daniel: a real selector, not a one-shot translation, because he wants this app
- * sellable outside Spain too. `{token}` substitution is the same convention
- * dryland-test-logger's own `t()` already uses (catalog.js) — same idea, kept as a separate
- * implementation on purpose, same reason the two apps' bundles are independent (LOTE 3 §1).
+ * sellable outside Spain too. `{token}` in a text is replaced by the value of the same name
+ * passed to t().
  *
- * NOT in here yet, and deliberately left for its own slice: the battery's own vocabulary —
- * guide/landmark labels (export/guides.js) and test/metric labels (export/catalogRef.js), e.g.
- * "Bridge (puente)" or "Shoulder". Those are content (AQUAMAD's own naming, mirrored from
- * dryland-test-logger), not app chrome, and translating them means touching the files a
- * commercial build without AQUAMAD's battery would swap out entirely — see ESTADO.md.
+ * Since LOTE 7 it also holds the text of the measurement guides (guide.*, landmark.*, measure.*
+ * keys, see src/export/guides.js), which is content for the user, not app chrome.
  */
 
 const LANG_STORAGE_KEY = 'angle-lab/lang';
@@ -88,8 +84,6 @@ const STRINGS = {
     protocolBullet8: 'angle-lab <strong>measures and reports</strong>. It does not diagnose or recommend.',
 
     guideTitle: 'Measurement guide',
-    guideHint:
-      'Tap the named landmarks in order on the photo; the angle or distance each one feeds is built and tagged for export automatically once every landmark it needs has a point. The points themselves stay ordinary points afterwards — draggable in Select, like any other.',
     guideListEmpty: 'No guides yet.',
     guideListItem: '{label} — {count} points',
     guideReadoutWaiting: '{guide}: tap {landmark} ({n}/{total}).',
@@ -125,8 +119,6 @@ const STRINGS = {
     projectChipPhoto: 'photo {n} of {m}',
 
     historyTitle: 'History',
-    historyHint:
-      'Every project saved on this device, most recent first. Subject code is editable right here. "New project" (top bar) saves the one you\'re on and starts a blank one — nothing here is ever deleted except with the buttons below.',
     historyDeleteAllButton: 'Delete all projects',
     historyEmpty: 'No saved projects yet.',
     historyCodePlaceholder: 'no code',
@@ -139,20 +131,89 @@ const STRINGS = {
     historyDeleteAllConfirm: 'Delete every saved project on this device, including the one open now? This cannot be undone.',
 
     exportTitle: 'Export',
-    exportHint:
-      'Fills rows for <code>mediciones-2026-27.csv</code> — the schema, not the file itself: this is a static site with no access to your OneDrive, so the CSV lands via Share/Save the same way seco\'s own export already does, and you paste or append it by hand. Only <strong>tagged</strong> readings below are exported; anything left "— untagged —" is skipped, not sent as a blank row.',
     exportSubjectCodeLabel: 'Subject code',
-    exportCategoryLabel: 'Category',
     exportDateLabel: 'Date',
-    exportEvaluatorLabel: 'Evaluator',
     exportPngButton: 'Share photo (PNG)',
-    exportCsvButton: 'Share CSV rows',
-    exportUntaggedOption: '— untagged —',
     exportNoPhoto: 'No photo loaded.',
     exportNoMeasurements: 'No angle/distance measurements on this photo yet.',
-    exportTaggedCount: '{tagged} of {total} tagged — only tagged readings export.',
     exportReadingAngle: 'Angle · {value} ({quality})',
     exportReadingDistance: 'Distance · {value} ({quality})',
+    exportHint:
+      'Share the photo with its measurements written under it, or a table (CSV) of the measurements, which opens in Numbers or Excel. Give each measurement a name (select it, then Label) to tell the rows apart.',
+    exportCsvButton: 'Share table (CSV)',
+    exportNameLabel: 'Name',
+    exportNamePlaceholder: 'Name (optional)',
+    exportNoName: 'unnamed',
+    footerDisclaimer: 'Angles projected on a single photo',
+    footerMore: '+{n} more',
+    labelButton: 'Label',
+    labelDialogTitle: 'Name this measurement',
+    labelDialogField: 'Name',
+    labelDialogPlaceholder: 'e.g. left knee',
+    labelSave: 'Save',
+    historyHint:
+      'Every project saved on this device, most recent first. Subject code is editable right here. "New project" (in the menu) saves the one you\'re on and starts a blank one — nothing here is ever deleted except with the buttons below.',
+    guideHint:
+      'Pick a position. You get how to take the photo and which points to tap, in order; the angles are then built and named automatically. The points stay ordinary points afterwards — draggable in Move, like any other.',
+    guideStartButton: 'Start',
+    guideBackButton: 'Back',
+    guideDetailCamera: 'How to take the photo',
+    guideDetailPoints: 'Points to tap, in order',
+    guideDetailResult: 'What you get',
+    guideDetailExtra: 'Optional extra',
+
+    'guide.handstand': 'Handstand',
+    'guide.handstand.camera':
+      'Side view (profile): the camera perpendicular to the plane of the movement, still, at a moderate distance, with the whole body in frame from wrists to ankles. Tap the points on the side of the body that faces the camera.',
+    'guide.handstand.read':
+      'Shoulder angle: close to 180° in a classic straight-line handstand; lower means the shoulder is not fully opening. Hip angle: close to 180° is a straight line; closing towards the back is a lumbar arch, closing forward is a bent hip (pike). 180° is a coaching reference, not a clinical range.',
+    'guide.handstand.extra':
+      'Elbow angle (vertex at the elbow, rays to the shoulder and the wrist), to check the arm is locked. Add it with the Angle tool.',
+    'guide.bridge': 'Bridge',
+    'guide.bridge.camera':
+      'Side view (profile): the camera perpendicular to the plane of the movement, still, at a moderate distance, with the whole body in frame. Tap the points on the side of the body that faces the camera.',
+    'guide.bridge.read':
+      'Shoulder angle: how far the shoulder opens over the head, the most frequent limiter. Hip angle: if it stays well under 180° the hip is not opening and the lower back is paying for the bridge. 180° is a coaching reference, not a clinical range.',
+    'guide.bridge.extra':
+      'Elbow angle (vertex at the elbow, rays to the shoulder and the wrist), to check the arm is straight and not compensating bent. Add it with the Angle tool.',
+    'guide.split_front': 'Front split',
+    'guide.split_front.camera':
+      'Side view: the camera perpendicular to the plane of the legs (they go forward and back), still, at a moderate distance, with the whole body in frame. Tap the points on the side of the body that faces the camera.',
+    'guide.split_front.read':
+      'Total angle: the legs at the hip, 180° is a full split; it is the single most informative number. Back-leg hip angle: shoulder, hip and back ankle; it usually limits before the front leg (psoas, rectus femoris), so it deserves its own look.',
+    'guide.split_front.extra':
+      'Knee angle (vertex at the knee, rays to the hip and the ankle of that leg) if you suspect the knee bends instead of the hip opening: it should approach 180°. Add it with the Angle tool.',
+    'guide.split_side': 'Side split',
+    'guide.split_side.camera':
+      'Front view: the camera in front of the athlete, perpendicular to the plane of the legs (they open to the sides), still, at a moderate distance, with the whole body in frame.',
+    'guide.split_side.read':
+      'Angle between the legs: vertex where the legs meet, rays to each ankle. 180° is a full side split, a coaching reference rather than a clinical range.',
+
+    'landmark.wrist': 'Wrist (styloid process)',
+    'landmark.wrist.where': 'The bone that sticks out at the side of the wrist.',
+    'landmark.shoulder': 'Shoulder (acromion)',
+    'landmark.shoulder.where': 'The bony edge at the tip of the shoulder.',
+    'landmark.hip': 'Hip (greater trochanter)',
+    'landmark.hip.where': 'The bump on the side of the hip, easy to feel.',
+    'landmark.knee': 'Knee (lateral epicondyle)',
+    'landmark.knee.where': 'The bony bump on the outside of the knee.',
+    'landmark.ankle': 'Ankle (lateral malleolus)',
+    'landmark.ankle.where': 'The outer ankle bone.',
+    'landmark.ankle_front': 'Front ankle (lateral malleolus)',
+    'landmark.ankle_front.where': 'The outer ankle bone of the leg in front.',
+    'landmark.ankle_back': 'Back ankle (lateral malleolus)',
+    'landmark.ankle_back.where': 'The outer ankle bone of the leg behind.',
+    'landmark.ankle_one': 'Ankle, one side (lateral malleolus)',
+    'landmark.ankle_one.where': 'The outer ankle bone of one leg.',
+    'landmark.ankle_other': 'Ankle, other side (lateral malleolus)',
+    'landmark.ankle_other.where': 'The outer ankle bone of the other leg.',
+    'landmark.crotch': 'Crotch',
+    'landmark.crotch.where': 'The point where the two legs meet, at the lowest part of the pelvis.',
+
+    'measure.shoulder': 'Shoulder angle',
+    'measure.hip': 'Hip angle',
+    'measure.split_total': 'Total split angle',
+    'measure.back_hip': 'Back-leg hip angle',
 
     exportFailed: 'The image could not be exported. Try again, or export a smaller photo.',
     photoSaveFailed: 'The photo could not be saved on this device. The measurements are kept, but the photo will be lost when you close the app. Free up space (History) and load it again.',
@@ -161,18 +222,11 @@ const STRINGS = {
     storageWarning:
       'Device storage is {pct}% full. Open History to delete old projects, or export what you need, before the browser evicts it on its own.',
 
-    seasonEndedBanner: 'The season ended on {end}. Delete this device\'s projects, or wait?',
-    seasonPurgeButton: 'Delete season projects',
-    seasonSnoozeButton: 'Remind me in 30 days',
-    seasonPurgeConfirm:
-      'This deletes {n} project(s) and their photos from this device. This cannot be undone: export anything you want to keep first. Sure?',
 
     repeatTapMoreOne: 'Tap the same point {n} more time.',
     repeatTapMoreMany: 'Tap the same point {n} more times.',
     repeatResult: 'Your own repeatability: ±{rms} px{realText} typical, {max} px worst of {count} taps. Tap again to redo.',
 
-    returnBarButton: 'Send to seco',
-    returnBarText: '{subject} · {test}/{metric}: {value} {unit} — ready to send to seco',
   },
   es: {
     pageTitle: 'angle-lab',
@@ -247,8 +301,6 @@ const STRINGS = {
     protocolBullet8: 'angle-lab <strong>mide y reporta</strong>. No diagnostica ni recomienda.',
 
     guideTitle: 'Guía de medición',
-    guideHint:
-      'Toca los puntos de referencia nombrados en orden sobre la foto; el ángulo o la distancia que cada uno alimenta se construye y etiqueta para exportar en cuanto todos sus puntos existen. Los puntos en sí siguen siendo puntos normales después — se pueden arrastrar en Seleccionar, como cualquier otro.',
     guideListEmpty: 'Todavía no hay guías.',
     guideListItem: '{label} — {count} puntos',
     guideReadoutWaiting: '{guide}: toca {landmark} ({n}/{total}).',
@@ -284,8 +336,6 @@ const STRINGS = {
     projectChipPhoto: 'foto {n} de {m}',
 
     historyTitle: 'Historial',
-    historyHint:
-      'Todos los proyectos guardados en este dispositivo, el más reciente primero. El código de sujeto se edita aquí mismo. «Nuevo proyecto» (barra superior) guarda el que tienes abierto y arranca uno en blanco — nada aquí se borra salvo con los botones de abajo.',
     historyDeleteAllButton: 'Borrar todos los proyectos',
     historyEmpty: 'Todavía no hay proyectos guardados.',
     historyCodePlaceholder: 'sin código',
@@ -298,20 +348,89 @@ const STRINGS = {
     historyDeleteAllConfirm: '¿Borrar todos los proyectos guardados en este dispositivo, incluido el que tienes abierto ahora? No se puede deshacer.',
 
     exportTitle: 'Exportar',
-    exportHint:
-      'Rellena filas para <code>mediciones-2026-27.csv</code> — el esquema, no el archivo en sí: esto es un sitio estático sin acceso a tu OneDrive, así que el CSV sale por Compartir/Guardar igual que ya hace la exportación de seco, y lo pegas o lo añades a mano. Solo se exportan las lecturas <strong>etiquetadas</strong> de abajo; las que queden en "— sin etiquetar —" se saltan, nunca salen como fila en blanco.',
     exportSubjectCodeLabel: 'Código de sujeto',
-    exportCategoryLabel: 'Categoría',
     exportDateLabel: 'Fecha',
-    exportEvaluatorLabel: 'Evaluador',
     exportPngButton: 'Compartir foto (PNG)',
-    exportCsvButton: 'Compartir filas CSV',
-    exportUntaggedOption: '— sin etiquetar —',
     exportNoPhoto: 'No hay foto cargada.',
     exportNoMeasurements: 'Todavía no hay ángulos ni distancias en esta foto.',
-    exportTaggedCount: '{tagged} de {total} etiquetadas — solo se exportan las etiquetadas.',
     exportReadingAngle: 'Ángulo · {value} ({quality})',
     exportReadingDistance: 'Distancia · {value} ({quality})',
+    exportHint:
+      'Comparte la foto con sus medidas escritas debajo, o una tabla (CSV) con las medidas, que se abre en Numbers o Excel. Ponle nombre a cada medida (selecciónala y pulsa Etiquetar) para distinguir las filas.',
+    exportCsvButton: 'Compartir tabla (CSV)',
+    exportNameLabel: 'Nombre',
+    exportNamePlaceholder: 'Nombre (opcional)',
+    exportNoName: 'sin nombre',
+    footerDisclaimer: 'Ángulos proyectados sobre una sola foto',
+    footerMore: '+{n} más',
+    labelButton: 'Etiquetar',
+    labelDialogTitle: 'Pon nombre a esta medida',
+    labelDialogField: 'Nombre',
+    labelDialogPlaceholder: 'p. ej. rodilla izquierda',
+    labelSave: 'Guardar',
+    historyHint:
+      'Todos los proyectos guardados en este dispositivo, el más reciente primero. El código de sujeto se edita aquí mismo. «Nuevo proyecto» (en el menú) guarda el que tienes abierto y arranca uno en blanco — nada aquí se borra salvo con los botones de abajo.',
+    guideHint:
+      'Elige una posición. Verás cómo hacer la foto y qué puntos tocar, en orden; los ángulos se construyen y se nombran solos. Los puntos siguen siendo puntos normales — se arrastran con Mover, como cualquier otro.',
+    guideStartButton: 'Empezar',
+    guideBackButton: 'Volver',
+    guideDetailCamera: 'Cómo hacer la foto',
+    guideDetailPoints: 'Puntos que tocar, en orden',
+    guideDetailResult: 'Qué obtienes',
+    guideDetailExtra: 'Extra opcional',
+
+    'guide.handstand': 'Pino',
+    'guide.handstand.camera':
+      'Vista lateral (de perfil): la cámara perpendicular al plano del movimiento, quieta, a distancia moderada y con todo el cuerpo en el encuadre, de las muñecas a los tobillos. Toca los puntos del lado del cuerpo que mira a la cámara.',
+    'guide.handstand.read':
+      'Ángulo de hombro: cercano a 180° en un pino de línea recta clásica; por debajo, el hombro no se abre del todo. Ángulo de cadera: cerca de 180° es línea recta; si se cierra hacia la espalda es arqueo lumbar, y si se cierra hacia delante es cadera doblada (pike). 180° es una referencia de entrenamiento, no un rango clínico.',
+    'guide.handstand.extra':
+      'Ángulo de codo (vértice en el codo, rayos al hombro y a la muñeca), para comprobar que el brazo está bloqueado. Añádelo con la herramienta Ángulo.',
+    'guide.bridge': 'Puente',
+    'guide.bridge.camera':
+      'Vista lateral (de perfil): la cámara perpendicular al plano del movimiento, quieta, a distancia moderada y con todo el cuerpo en el encuadre. Toca los puntos del lado del cuerpo que mira a la cámara.',
+    'guide.bridge.read':
+      'Ángulo de hombro: cuánto se abre el hombro por encima de la cabeza, el limitante más frecuente. Ángulo de cadera: si se queda muy por debajo de 180°, la cadera no se abre y la zona lumbar paga el puente. 180° es una referencia de entrenamiento, no un rango clínico.',
+    'guide.bridge.extra':
+      'Ángulo de codo (vértice en el codo, rayos al hombro y a la muñeca), para comprobar que el brazo está extendido y no compensa doblado. Añádelo con la herramienta Ángulo.',
+    'guide.split_front': 'Spagat frontal',
+    'guide.split_front.camera':
+      'Vista lateral: la cámara perpendicular al plano de las piernas (van hacia delante y hacia atrás), quieta, a distancia moderada y con todo el cuerpo en el encuadre. Toca los puntos del lado del cuerpo que mira a la cámara.',
+    'guide.split_front.read':
+      'Ángulo total: las piernas en la cadera, 180° es spagat completo; es el número más informativo. Ángulo de cadera de la pierna trasera: hombro, cadera y tobillo trasero; casi siempre limita antes que la pierna delantera (psoas, recto femoral), así que merece mirarse aparte.',
+    'guide.split_front.extra':
+      'Ángulo de rodilla (vértice en la rodilla, rayos a la cadera y al tobillo de esa pierna) si sospechas que se dobla la rodilla en vez de abrirse la cadera: debe acercarse a 180°. Añádelo con la herramienta Ángulo.',
+    'guide.split_side': 'Spagat lateral',
+    'guide.split_side.camera':
+      'Vista frontal: la cámara delante del deportista, perpendicular al plano de las piernas (se abren hacia los lados), quieta, a distancia moderada y con todo el cuerpo en el encuadre.',
+    'guide.split_side.read':
+      'Ángulo entre las piernas: vértice donde se unen las piernas, rayos a cada tobillo. 180° es spagat lateral completo, una referencia de entrenamiento más que un rango clínico.',
+
+    'landmark.wrist': 'Muñeca (apófisis estiloides)',
+    'landmark.wrist.where': 'El hueso que sobresale en el lado de la muñeca.',
+    'landmark.shoulder': 'Hombro (acromion)',
+    'landmark.shoulder.where': 'El borde óseo en la punta del hombro.',
+    'landmark.hip': 'Cadera (trocánter mayor)',
+    'landmark.hip.where': 'El bulto lateral de la cadera, se palpa fácil.',
+    'landmark.knee': 'Rodilla (epicóndilo lateral)',
+    'landmark.knee.where': 'El bulto óseo en la cara externa de la rodilla.',
+    'landmark.ankle': 'Tobillo (maléolo lateral)',
+    'landmark.ankle.where': 'El tobillo externo.',
+    'landmark.ankle_front': 'Tobillo delantero (maléolo lateral)',
+    'landmark.ankle_front.where': 'El tobillo externo de la pierna que va delante.',
+    'landmark.ankle_back': 'Tobillo trasero (maléolo lateral)',
+    'landmark.ankle_back.where': 'El tobillo externo de la pierna que va detrás.',
+    'landmark.ankle_one': 'Tobillo de un lado (maléolo lateral)',
+    'landmark.ankle_one.where': 'El tobillo externo de una pierna.',
+    'landmark.ankle_other': 'Tobillo del otro lado (maléolo lateral)',
+    'landmark.ankle_other.where': 'El tobillo externo de la otra pierna.',
+    'landmark.crotch': 'Entrepierna',
+    'landmark.crotch.where': 'El punto donde se unen las dos piernas, en la parte más baja de la pelvis.',
+
+    'measure.shoulder': 'Ángulo de hombro',
+    'measure.hip': 'Ángulo de cadera',
+    'measure.split_total': 'Ángulo total del spagat',
+    'measure.back_hip': 'Ángulo de cadera de la pierna trasera',
 
     exportFailed: 'No se ha podido exportar la imagen. Inténtalo de nuevo o exporta una foto más pequeña.',
     photoSaveFailed: 'No se ha podido guardar la foto en este dispositivo. Las medidas se conservan, pero la foto se perderá al cerrar la app. Libera espacio (Historial) y vuelve a cargarla.',
@@ -320,18 +439,11 @@ const STRINGS = {
     storageWarning:
       'El almacenamiento del dispositivo está al {pct}%. Abre Historial para borrar proyectos antiguos, o exporta lo que necesites, antes de que el navegador lo libere por su cuenta.',
 
-    seasonEndedBanner: 'La temporada terminó el {end}. ¿Borras los proyectos de este dispositivo, o prefieres esperar?',
-    seasonPurgeButton: 'Borrar proyectos de la temporada',
-    seasonSnoozeButton: 'Recordarlo en 30 días',
-    seasonPurgeConfirm:
-      'Se borran {n} proyecto(s) y sus fotos de este dispositivo. No hay deshacer: exporta antes si hay algo que quieras conservar. ¿Seguro?',
 
     repeatTapMoreOne: 'Toca el mismo punto {n} vez más.',
     repeatTapMoreMany: 'Toca el mismo punto {n} veces más.',
     repeatResult: 'Tu propia repetibilidad: ±{rms} px{realText} típico, {max} px peor de {count} toques. Toca de nuevo para repetir.',
 
-    returnBarButton: 'Enviar a seco',
-    returnBarText: '{subject} · {test}/{metric}: {value} {unit} — listo para enviar a seco',
   },
 };
 

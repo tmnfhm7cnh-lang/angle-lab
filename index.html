@@ -40,17 +40,6 @@
     </div>
     <div id="error-bar" role="alert" hidden></div>
     <div id="storage-bar" role="status" hidden></div>
-    <div id="season-bar" role="status" hidden>
-      <span id="season-bar-text"></span>
-      <span class="season-bar-actions">
-        <button id="season-purge-button" class="bar-button danger-button" type="button" data-i18n="seasonPurgeButton">Delete season projects</button>
-        <button id="season-snooze-button" class="bar-button" type="button" data-i18n="seasonSnoozeButton">Remind me in 30 days</button>
-      </span>
-    </div>
-    <div id="return-bar" role="status" hidden>
-      <span id="return-bar-text"></span>
-      <button id="return-bar-button" class="bar-button" type="button" data-i18n="returnBarButton">Enviar a seco</button>
-    </div>
     <main id="canvas-area">
       <canvas id="view"></canvas>
       <canvas id="magnifier" class="magnifier" hidden></canvas>
@@ -83,6 +72,10 @@
         <button id="hint-cancel" type="button" hidden aria-label="Cancel selection" data-i18n-aria="hintCancel">&#x2715;</button>
       </div>
       <div id="selection-bar" class="selection-bar" hidden>
+        <button id="label-button" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12V5h7l9 9-7 7z" /><circle cx="8.5" cy="9.5" r="1.2" /></svg>
+          <span data-i18n="labelButton">Label</span>
+        </button>
         <button id="delete-selected-button" class="danger" type="button" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" /></svg>
           <span data-i18n="deleteSelectedButton">Delete selected</span>
@@ -245,13 +238,14 @@
     <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
     </button>
-    <h2 data-i18n="guideTitle">Measurement guide</h2>
-    <p class="export-hint" data-i18n="guideHint">
-      Tap the named landmarks in order on the photo; the angle or distance each one feeds is
-      built and tagged for export automatically once every landmark it needs has a point. The
-      points themselves stay ordinary points afterwards — draggable in Select, like any other.
-    </p>
-    <div id="guide-list"></div>
+    <h2 data-i18n="guideTitle">Measurement guides</h2>
+    <div id="guide-list-view">
+      <p class="export-hint" data-i18n="guideHint">
+        Pick a position. You get how to take the photo and which points to tap, in order.
+      </p>
+      <div id="guide-list"></div>
+    </div>
+    <div id="guide-detail" hidden></div>
     <button id="guide-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
   <dialog id="history-dialog" class="sheet-dialog">
@@ -260,43 +254,43 @@
     </button>
     <h2 data-i18n="historyTitle">History</h2>
     <p class="export-hint" data-i18n="historyHint">
-      Every project saved on this device, most recent first. Subject code is editable right here.
-      "New project" (top bar) saves the one you're on and starts a blank one — nothing here is ever
-      deleted except with the buttons below.
+      Every project saved on this device, most recent first.
     </p>
     <div id="history-list"></div>
     <button id="history-delete-all-button" class="bar-button danger-button" type="button" data-i18n="historyDeleteAllButton">Delete all projects</button>
     <button id="history-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
+  </dialog>
+  <dialog id="label-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
+    <h2 data-i18n="labelDialogTitle">Name this measurement</h2>
+    <label class="label-field">
+      <span data-i18n="labelDialogField">Name</span>
+      <input id="label-input" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences" data-i18n-placeholder="labelDialogPlaceholder" placeholder="e.g. left knee" />
+    </label>
+    <div class="export-actions">
+      <button id="label-save-button" class="bar-button primary-button" type="button" data-i18n="labelSave">Save</button>
+      <button id="label-cancel-button" class="bar-button" type="button" data-i18n="calibrationCancel">Cancel</button>
+    </div>
   </dialog>
   <dialog id="export-dialog" class="sheet-dialog">
     <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
     </button>
     <h2 data-i18n="exportTitle">Export</h2>
-    <p class="export-hint" data-i18n-html="exportHint">
-      Fills rows for <code>mediciones-2026-27.csv</code> — the schema, not the file itself: this is
-      a static site with no access to your OneDrive, so the CSV lands via Share/Save the same way
-      seco's own export already does, and you paste or append it by hand. Only <strong>tagged</strong>
-      readings below are exported; anything left "— untagged —" is skipped, not sent as a blank row.
+    <p class="export-hint" data-i18n="exportHint">
+      Share the photo with its measurements written under it, or a table of the measurements.
     </p>
     <div class="export-fields">
-      <label><span data-i18n="exportSubjectCodeLabel">Subject code</span> <input id="export-subject-code" type="text" placeholder="ATL-07" /></label>
-      <label><span data-i18n="exportCategoryLabel">Category</span>
-        <select id="export-category">
-          <option value="">—</option>
-          <option value="alevin">Alevín</option>
-          <option value="infantil">Infantil</option>
-          <option value="junior">Junior</option>
-        </select>
-      </label>
+      <label><span data-i18n="exportSubjectCodeLabel">Subject code</span> <input id="export-subject-code" type="text" placeholder="ID-01" /></label>
       <label><span data-i18n="exportDateLabel">Date</span> <input id="export-date" type="date" /></label>
-      <label><span data-i18n="exportEvaluatorLabel">Evaluator</span> <input id="export-evaluator" type="text" value="DJ" /></label>
     </div>
     <div id="export-readings"></div>
     <p id="export-untagged-note" class="export-hint"></p>
     <div class="export-actions">
       <button id="export-png-button" class="bar-button" type="button" data-i18n="exportPngButton">Share photo (PNG)</button>
-      <button id="export-csv-button" class="bar-button" type="button" data-i18n="exportCsvButton">Share CSV rows</button>
+      <button id="export-csv-button" class="bar-button" type="button" data-i18n="exportCsvButton">Share table (CSV)</button>
       <button id="export-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
     </div>
   </dialog>

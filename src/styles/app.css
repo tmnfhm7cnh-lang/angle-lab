@@ -443,56 +443,6 @@ html, body {
   color: var(--al-attention);
 }
 
-/* LOTE 5 §6: shown once the club's season-end date (batteryTags.js's AQUAMAD_SEASON_END) has
-   passed and the warning hasn't been snoozed — same "avisa y espera confirmación" policy as
-   dryland-test-logger's own season banner, never an automatic purge. */
-#season-bar {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--al-space-4);
-  padding: var(--al-space-3) var(--al-space-4);
-  font-size: var(--al-text-sm);
-  line-height: 1.4;
-  border-bottom: var(--al-border);
-  background: color-mix(in srgb, var(--al-attention) 16%, var(--al-bg));
-  color: var(--al-attention);
-}
-
-#season-bar[hidden] {
-  display: none;
-}
-
-.season-bar-actions {
-  display: flex;
-  gap: var(--al-space-3);
-  flex: 0 0 auto;
-}
-
-/* LOTE 5 §4: shown only while this session arrived from dryland-test-logger's "Analizar en
-   angle-lab" bridge (a ?return= URL param) AND the requested test/metric already has a tagged
-   reading on the current photo — the send-back button never appears before there is a real
-   number to send. */
-#return-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--al-space-4);
-  padding: var(--al-space-3) var(--al-space-4);
-  font-size: var(--al-text-sm);
-  line-height: 1.4;
-  border-bottom: var(--al-border);
-  background: color-mix(in srgb, var(--al-ok) 16%, var(--al-bg));
-  color: var(--al-ok);
-}
-
-#return-bar[hidden] {
-  display: none;
-}
-
 /* EMPTY STATE — the first screen anyone sees. */
 .empty {
   position: absolute;
@@ -980,6 +930,10 @@ button.chip::after {
   color: var(--al-danger);
 }
 
+.selection-bar button[hidden] {
+  display: none;
+}
+
 .selection-bar button:disabled {
   opacity: .4;
 }
@@ -1299,4 +1253,59 @@ button.chip:active {
 
 .thumb-delete:active {
   background: var(--al-danger);
+}
+
+/* LOTE 7: guide detail view, name field of the Label dialog, name field of an export row. */
+.guide-detail-title {
+  margin: 0 0 var(--al-space-3);
+  font-size: var(--al-text-lg);
+}
+
+#guide-detail h4 {
+  margin: var(--al-space-5) 0 var(--al-space-2);
+  font: var(--al-weight-semi) 11px/1.2 var(--al-font-ui);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--al-ink-faint);
+}
+
+#guide-detail p,
+.guide-points {
+  margin: 0 0 var(--al-space-3);
+  font-size: var(--al-text-sm);
+  line-height: 1.5;
+  color: var(--al-ink-muted);
+}
+
+.guide-points {
+  padding-left: 20px;
+}
+
+.guide-points strong {
+  color: var(--al-ink);
+}
+
+.label-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--al-space-2);
+  margin-bottom: var(--al-space-4);
+  font-size: var(--al-text-xs);
+  color: var(--al-ink-muted);
+}
+
+.label-field input,
+.export-name-input {
+  min-height: var(--al-tap);
+  padding: 0 var(--al-space-3);
+  background: var(--al-well);
+  border: var(--al-border);
+  border-radius: var(--al-radius-sm);
+  color: var(--al-ink);
+  font-size: 16px; /* >=16px stops iOS Safari zooming the page on focus */
+}
+
+.export-name-input {
+  flex: 1 1 140px;
+  min-width: 0;
 }

@@ -56,6 +56,7 @@ describe('describeReadout', () => {
     const r = describeReadout({ type: 'angle', degrees: 128.43, sigmaDegrees: 0.4, quality: { level: 'good' } });
     assert.deepEqual(r, {
       labelKey: 'wordAngle',
+      name: '',
       value: '128.4°',
       sigmaText: '±0.4°',
       qualityKey: 'qualityGood',
@@ -81,6 +82,7 @@ describe('describeReadout', () => {
     });
     assert.deepEqual(r, {
       labelKey: 'wordDistance',
+      name: '',
       value: '42.1 cm',
       sigmaText: '±0.2 cm',
       qualityKey: 'qualityOk',
@@ -97,5 +99,14 @@ describe('describeReadout', () => {
   test('a non-finite sigma leaves the sigma text empty', () => {
     const r = describeReadout({ type: 'angle', degrees: 90, sigmaDegrees: NaN, quality: { level: 'poor' } });
     assert.equal(r.sigmaText, '');
+  });
+});
+
+describe('describeReadout name', () => {
+  test('carries the name the user gave the measurement, or an empty string', () => {
+    const named = describeReadout({ type: 'angle', degrees: 90, sigmaDegrees: 0.3, quality: { level: 'good' }, name: 'left knee' });
+    assert.equal(named.name, 'left knee');
+    const unnamed = describeReadout({ type: 'distance', pixels: 10, real: NaN, unit: 'cm', sigma: 1, quality: { level: 'ok' } });
+    assert.equal(unnamed.name, '');
   });
 });

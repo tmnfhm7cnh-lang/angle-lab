@@ -9,8 +9,7 @@
  *   ESTADO.md, LOTE 5 §3.
  * `meta`     — one row, `activeProjectId`, pointing at whichever project the
  *   UI currently has open. Not the source of truth on its own: it is a
- *   resume pointer, same relationship dryland-test-logger's UI state has
- *   with its own records.
+ *   resume pointer.
  * `blobs`    — original photo Blobs, keyed by `imageId` (a model-generated
  *   UUID). NOT by filename: two photos can share a filename, and a filename
  *   is itself a personal-data channel nobody decided to open (LOTE 3 audit).
@@ -20,8 +19,7 @@
  * Every export here tolerates IndexedDB being unavailable or throwing
  * (private browsing, a blocked/evicted origin, an aborted transaction) by
  * resolving to null / false rather than throwing into caller code that has
- * no recovery path anyway — losing the save silently is the same failure
- * mode dryland-test-logger already accepts for its own localStorage writes.
+ * no recovery path anyway.
  */
 
 const DB_NAME = 'angle-lab-db';
