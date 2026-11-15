@@ -98,9 +98,14 @@
           <circle cx="60" cy="132" r="6" fill="var(--al-mark)" stroke="none" />
         </svg>
         <h1 class="empty-title">Angle Lab</h1>
-        <p class="empty-body" data-i18n="emptyBody">Open a photo to place points and read angles and distances.</p>
+        <ol class="empty-steps">
+          <li><span class="empty-step-number" aria-hidden="true">1</span><span data-i18n="emptyStep1">Open a photo</span></li>
+          <li><span class="empty-step-number" aria-hidden="true">2</span><span data-i18n="emptyStep2">Tap the joints</span></li>
+          <li><span class="empty-step-number" aria-hidden="true">3</span><span data-i18n="emptyStep3">Read the angle</span></li>
+        </ol>
+        <p class="empty-trust" data-i18n="emptyTrust">Photos never leave this device.</p>
         <div class="empty-actions">
-          <label class="bar-button">
+          <label class="bar-button primary-button">
             <span data-i18n="openPhotoLabel">Open photo</span>
             <input id="empty-file-input" type="file" accept="image/*" hidden />
           </label>
@@ -211,7 +216,10 @@
       </div>
     </div>
   </dialog>
-  <dialog id="protocol-dialog">
+  <dialog id="protocol-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
     <h2 data-i18n="protocolTitle1">Capture protocol</h2>
     <ul>
       <li data-i18n-html="protocolBullet1">Camera <strong>perpendicular</strong> to the plane of the gesture being measured — a tilted plane biases every angle by up to several degrees and shortens every length.</li>
@@ -229,7 +237,10 @@
     </ul>
     <button id="protocol-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
-  <dialog id="guide-dialog">
+  <dialog id="guide-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
     <h2 data-i18n="guideTitle">Measurement guide</h2>
     <p class="export-hint" data-i18n="guideHint">
       Tap the named landmarks in order on the photo; the angle or distance each one feeds is
@@ -239,7 +250,10 @@
     <div id="guide-list"></div>
     <button id="guide-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
-  <dialog id="history-dialog">
+  <dialog id="history-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
     <h2 data-i18n="historyTitle">History</h2>
     <p class="export-hint" data-i18n="historyHint">
       Every project saved on this device, most recent first. Subject code is editable right here.
@@ -250,7 +264,10 @@
     <button id="history-delete-all-button" class="bar-button danger-button" type="button" data-i18n="historyDeleteAllButton">Delete all projects</button>
     <button id="history-close-button" class="bar-button" type="button" data-i18n="closeButton">Close</button>
   </dialog>
-  <dialog id="export-dialog">
+  <dialog id="export-dialog" class="sheet-dialog">
+    <button class="icon-button sheet-close" type="button" aria-label="Close" data-i18n-aria="closeButton">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+    </button>
     <h2 data-i18n="exportTitle">Export</h2>
     <p class="export-hint" data-i18n-html="exportHint">
       Fills rows for <code>mediciones-2026-27.csv</code> — the schema, not the file itself: this is

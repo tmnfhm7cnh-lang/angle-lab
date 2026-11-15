@@ -35,6 +35,8 @@
   --al-mark:          #00E5FF;
   --al-mark-active:   #FFD23F;
   --al-mark-ref:      #FFFFFF;
+  --al-mark-calibration: #7CFF6B;  /* calibration reference line and its label */
+  --al-mark-pending:  #FFFFFF;     /* ring of a point picked for a measurement still in progress */
   --al-halo:          rgba(0,0,0,0.78);
   --al-plaque:        rgba(11,14,19,0.86);
   --al-plaque-edge:   rgba(255,255,255,0.22);

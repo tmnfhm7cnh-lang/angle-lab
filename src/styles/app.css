@@ -523,11 +523,41 @@ html, body {
   margin: 0;
 }
 
-.empty-body {
-  font: var(--al-text-md)/var(--al-lh-md) var(--al-font-ui);
-  color: var(--al-ink-muted);
-  max-width: 30ch;
+.empty-steps {
+  display: flex;
+  gap: var(--al-space-4);
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty-steps li {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--al-space-3);
+  max-width: 104px;
+  font: var(--al-text-sm)/1.3 var(--al-font-ui);
+  color: var(--al-ink);
+}
+
+.empty-step-number {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: var(--al-border-strong);
+  border-radius: 50%;
+  font: var(--al-weight-semi) 13px var(--al-font-num);
+  color: var(--al-ink-muted);
+}
+
+.empty-trust {
+  margin: 0;
+  font-size: var(--al-text-xs);
+  color: var(--al-ink-faint);
 }
 
 .empty-actions {
@@ -544,9 +574,24 @@ html, body {
   box-shadow: none;
 }
 
-#protocol-dialog {
+/* The one primary action of a screen: ink on the page colour, inverted. */
+.primary-button {
+  background: var(--al-ink);
+  color: var(--al-ink-inverse);
+  border-color: var(--al-ink);
+  box-shadow: none;
+}
+
+.primary-button:active {
+  background: var(--al-ink);
+  opacity: .8;
+}
+
+/* LOTE 5 §3: one recipe for the four content dialogs (protocol, guides, history, export). A bottom
+   sheet on a phone, a centred card elsewhere; ✕ (44x44) top right, closes on a tap outside too. */
+.sheet-dialog {
   max-width: min(560px, 92vw);
-  max-height: 85vh;
+  max-height: 85dvh;
   overflow-y: auto;
   background: var(--al-surface-2);
   color: var(--al-ink);
@@ -556,16 +601,56 @@ html, body {
   box-shadow: var(--al-shadow-3);
 }
 
-#protocol-dialog::backdrop {
-  background: var(--al-scrim);
+.sheet-dialog::backdrop {
+  background: var(--al-scrim, rgba(5, 7, 10, .6));
 }
 
-#protocol-dialog h2 {
+#export-dialog {
+  max-width: min(640px, 92vw);
+}
+
+.sheet-dialog h2 {
   font-size: var(--al-text-lg);
+  margin: 0 0 var(--al-space-3);
+}
+
+.sheet-dialog > .bar-button {
+  margin-top: var(--al-space-3);
+}
+
+.sheet-close {
+  float: right;
+  margin: calc(-1 * var(--al-space-4)) calc(-1 * var(--al-space-4)) var(--al-space-3) var(--al-space-3);
+}
+
+@media (max-width: 599px) {
+  .sheet-dialog {
+    position: fixed;
+    inset: auto 0 0 0;
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 90dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--al-radius-xl) var(--al-radius-xl) 0 0;
+    padding: var(--al-space-5) calc(var(--al-space-5) + env(safe-area-inset-right)) calc(var(--al-space-5) + env(safe-area-inset-bottom)) calc(var(--al-space-5) + env(safe-area-inset-left));
+  }
+
+  #export-dialog {
+    max-width: none;
+  }
+
+  .sheet-close {
+    margin: calc(-1 * var(--al-space-3)) calc(-1 * var(--al-space-3)) var(--al-space-3) var(--al-space-3);
+  }
+}
+
+/* The protocol text is long prose, with its own heading rhythm. */
+#protocol-dialog h2 {
   margin: var(--al-space-5) 0 var(--al-space-3);
 }
 
-#protocol-dialog h2:first-child {
+#protocol-dialog h2:first-of-type {
   margin-top: 0;
 }
 
@@ -581,35 +666,6 @@ html, body {
   margin: var(--al-space-3) 0;
 }
 
-#protocol-dialog button {
-  margin-top: var(--al-space-4);
-}
-
-#guide-dialog {
-  max-width: min(560px, 92vw);
-  max-height: 85vh;
-  overflow-y: auto;
-  background: var(--al-surface-2);
-  color: var(--al-ink);
-  border: var(--al-border);
-  border-radius: var(--al-radius-lg);
-  padding: var(--al-space-6) var(--al-space-7);
-  box-shadow: var(--al-shadow-3);
-}
-
-#guide-dialog::backdrop {
-  background: var(--al-scrim);
-}
-
-#guide-dialog h2 {
-  font-size: var(--al-text-lg);
-  margin: 0 0 var(--al-space-3);
-}
-
-#guide-dialog button {
-  margin-top: var(--al-space-3);
-}
-
 #guide-list {
   display: flex;
   flex-direction: column;
@@ -621,39 +677,17 @@ html, body {
   text-align: left;
 }
 
-#history-dialog {
-  max-width: min(560px, 92vw);
-  max-height: 85vh;
-  overflow-y: auto;
-  background: var(--al-surface-2);
-  color: var(--al-ink);
-  border: var(--al-border);
-  border-radius: var(--al-radius-lg);
-  padding: var(--al-space-6) var(--al-space-7);
-  box-shadow: var(--al-shadow-3);
-}
-
-#history-dialog::backdrop {
-  background: var(--al-scrim);
-}
-
-#history-dialog h2 {
-  font-size: var(--al-text-lg);
-  margin: 0 0 var(--al-space-3);
-}
-
-#history-dialog > button {
-  margin-top: var(--al-space-3);
-}
-
 #history-list {
   display: flex;
   flex-direction: column;
   gap: var(--al-space-3);
 }
 
+/* LOTE 5 §4: two lines. Top: code field, then date + photo count on one line. Bottom, right:
+   Open and Delete. Nothing wraps, so it holds at 320 px. */
 .history-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--al-space-3);
   padding: var(--al-space-3);
@@ -663,45 +697,33 @@ html, body {
 }
 
 .history-code-input {
-  flex: 0 0 96px;
+  grid-column: 1;
+  min-width: 0;
   background: var(--al-well);
   border: var(--al-border);
   color: var(--al-ink);
   border-radius: var(--al-radius-sm);
   padding: var(--al-space-2) var(--al-space-3);
-  font-size: var(--al-text-sm);
-  min-width: 0;
+  font-size: 16px; /* >=16px stops iOS Safari zooming the page on focus */
+  min-height: var(--al-tap);
 }
 
 .history-meta {
-  flex: 1 1 auto;
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--al-text-xs);
   color: var(--al-ink-muted);
 }
 
-.history-row button {
-  flex: 0 0 auto;
+.history-row button:nth-of-type(1) {
+  grid-column: 3;
 }
 
-#export-dialog {
-  max-width: min(640px, 92vw);
-  max-height: 85vh;
-  overflow-y: auto;
-  background: var(--al-surface-2);
-  color: var(--al-ink);
-  border: var(--al-border);
-  border-radius: var(--al-radius-lg);
-  padding: var(--al-space-6) var(--al-space-7);
-  box-shadow: var(--al-shadow-3);
-}
-
-#export-dialog::backdrop {
-  background: var(--al-scrim);
-}
-
-#export-dialog h2 {
-  font-size: var(--al-text-lg);
-  margin: 0 0 var(--al-space-3);
+.history-row button:nth-of-type(2) {
+  grid-column: 4;
 }
 
 .export-hint {
@@ -1164,4 +1186,27 @@ button.chip::after {
     content: attr(data-short);
     font-size: 12px;
   }
+}
+
+/* LOTE 5 §6: pressed states for the new controls (focus is the global :focus-visible ring). */
+.project-chip:active,
+.seg button:active:not(:disabled),
+.selection-bar button:active:not(:disabled),
+#hint-cancel:active {
+  background: var(--al-surface-3);
+}
+
+button.chip:active {
+  background: var(--al-surface-3);
+  color: var(--al-ink);
+}
+
+.link-button:active {
+  opacity: .6;
+}
+
+.tool-button:focus-visible,
+.icon-button:focus-visible,
+.row:focus-visible {
+  outline-offset: -2px;
 }

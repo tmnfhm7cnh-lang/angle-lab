@@ -79,6 +79,24 @@ const projectChip = document.getElementById('project-chip');
 const projectChipCode = document.getElementById('project-chip-code');
 const projectChipPhoto = document.getElementById('project-chip-photo');
 const disclaimerProtocolLink = document.getElementById('disclaimer-protocol-link');
+
+// LOTE 5 §1: the canvas colours come from the --al-* tokens, read once at start-up; the renderer
+// keeps its own defaults for anything missing.
+function readCanvasTheme() {
+  const styles = getComputedStyle(document.documentElement);
+  const token = (name) => styles.getPropertyValue(name).trim() || undefined;
+  const theme = {
+    mark: token('--al-mark'),
+    markActive: token('--al-mark-active'),
+    halo: token('--al-halo'),
+    plaque: token('--al-plaque'),
+    plaqueEdge: token('--al-plaque-edge'),
+    markCalibration: token('--al-mark-calibration'),
+    markPending: token('--al-mark-pending'),
+  };
+  return Object.fromEntries(Object.entries(theme).filter(([, value]) => value));
+}
+const canvasTheme = readCanvasTheme();
 const emptyState = document.getElementById('empty-state');
 const emptyFileInput = document.getElementById('empty-file-input');
 const emptyCameraInput = document.getElementById('empty-camera-input');
@@ -642,7 +660,7 @@ function scheduleRender() {
       angles: activeAngles(),
       distances: activeDistances(),
       calibration: calibrationOverlay(),
-    });
+    }, 1, canvasTheme);
     updateReadout();
     updateCalibrationControls();
     updateReturnBar();
@@ -897,6 +915,23 @@ menuSheet.addEventListener('click', (event) => {
 });
 for (const input of [fileInput, cameraInput]) input.addEventListener('change', () => menuSheet.close());
 disclaimerProtocolLink.addEventListener('click', () => protocolDialog.showModal());
+
+// LOTE 5 §3: the four content dialogs share one behaviour — the ✕ closes, and so does a tap
+// outside the box (a click whose target is the <dialog> itself but whose point is outside its
+// rectangle, i.e. on the backdrop; a click on its own padding is inside the rectangle).
+for (const dialog of document.querySelectorAll('.sheet-dialog')) {
+  dialog.addEventListener('click', (event) => {
+    if (event.target.closest('.sheet-close')) {
+      dialog.close();
+      return;
+    }
+    if (event.target !== dialog) return;
+    const box = dialog.getBoundingClientRect();
+    const outside =
+      event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+    if (outside) dialog.close();
+  });
+}
 
 function deleteSelected() {
   if (!selectedEntityId) return;
@@ -1716,7 +1751,7 @@ exportPngButton.addEventListener('click', async () => {
     angles: activeAngles(),
     distances: activeDistances(),
     calibration: calibrationOverlay(),
-  }, overlayScale);
+  }, overlayScale, canvasTheme);
   if (decodedFresh) bitmap.close();
   const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));
   // toBlob hands back null when it cannot encode (canvas too large, memory): sharing that would

@@ -52,7 +52,10 @@ const STRINGS = {
 
     disclaimerShort: 'Angles are <strong>projected</strong>: camera perpendicular to the gesture',
 
-    emptyBody: 'Open a photo to place points and read angles and distances.',
+    emptyStep1: 'Open a photo',
+    emptyStep2: 'Tap the joints',
+    emptyStep3: 'Read the angle',
+    emptyTrust: 'Photos never leave this device.',
     openPhotoLabel: 'Open photo',
     takePhotoLabel: 'Take photo',
 
@@ -203,7 +206,10 @@ const STRINGS = {
 
     disclaimerShort: 'Ángulos <strong>proyectados</strong>: cámara perpendicular al gesto',
 
-    emptyBody: 'Abre una foto para colocar puntos y leer ángulos y distancias.',
+    emptyStep1: 'Abre una foto',
+    emptyStep2: 'Toca las articulaciones',
+    emptyStep3: 'Lee el ángulo',
+    emptyTrust: 'Las fotos no salen de este dispositivo.',
     openPhotoLabel: 'Abrir foto',
     takePhotoLabel: 'Hacer foto',
 
